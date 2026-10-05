@@ -140,7 +140,24 @@ const THEMES = [
   { id: 'night-rider', name: 'Night Rider', layout: 'kitt', colourMode: 'fixed', mirror: true,
     bg: '#000000', panel: '#080101', segOff: '#2A0605', segLow: '#FF1E0E', segHigh: '#FF6A45', peak: '#FFD0C0',
     accent: '#FF2A12', label: '#7A1E14', glow: '#FF1E0E', glowStrength: 24, segGap: 3, barGap: 6, radius: 1,
-    header: 'VOICE ANALYSER', freqs: [40, 100, 250, 1000, 4000, 16000], segments: 12 }
+    header: 'VOICE ANALYSER', freqs: [40, 100, 250, 1000, 4000, 16000], segments: 12 },
+  { id: 'red-led', name: 'Red LED', layout: 'wide', colourMode: 'fixed',
+    bg: '#000000', panel: '#0D0303', segOff: '#2A0807', segLow: '#FF2A1A', segHigh: '#FF7055', peak: '#FFD6CC',
+    accent: '#FF3B2A', label: '#7A2018', glow: '#FF2A1A', glowStrength: 22, segGap: 3, barGap: 4, radius: 1,
+    header: 'SPECTRUM ANALYZER', freqs: [40, 100, 1000, 4000, 16000], segments: 16 },
+  // Physical faceplates: the display sits behind glass in a real component's front panel
+  { id: 'silver-receiver', name: 'Silver Receiver', layout: 'fascia', material: 'aluminium', face: '#BDBDBA', colourMode: 'fixed',
+    bg: '#9C9C9A', panel: '#03141A', segOff: '#0C2A33', segLow: '#5FE3FF', segHigh: '#B5F3FF', peak: '#EFFFFF',
+    accent: '#7FE6FF', label: '#2E7A92', glow: '#5FE3FF', glowStrength: 18, segGap: 3, barGap: 4, radius: 2,
+    header: 'SPECTRUM', brand: 'STEREO SPECTRUM ANALYZER', model: 'SA-2400', freqs: [40, 100, 250, 1000, 4000, 16000], segments: 16 },
+  { id: 'black-ash', name: 'Black Ash', layout: 'fascia', material: 'blackash', face: '#1C1C1C', print: '#B5B5B5', colourMode: 'fixed',
+    bg: '#111111', panel: '#080503', segOff: '#2A1A08', segLow: '#FF9A2E', segHigh: '#FFD38F', peak: '#FFF1D6',
+    accent: '#FFA640', label: '#8A5A22', glow: '#FF9A2E', glowStrength: 16, segGap: 2, barGap: 4, radius: 1,
+    header: 'LEVEL', brand: 'GRAPHIC SPECTRUM DISPLAY', model: 'GS-850', freqs: [40, 100, 250, 1000, 4000, 16000], segments: 16 },
+  { id: 'walnut-receiver', name: 'Walnut Receiver', layout: 'fascia', material: 'walnut', face: '#CFC2A3', colourMode: 'fixed',
+    bg: '#3A2112', panel: '#120B05', segOff: '#2C1D0C', segLow: '#FFBE5C', segHigh: '#FFE2AE', peak: '#FFF6E6',
+    accent: '#FFC46B', label: '#8A6A3A', glow: '#FFB347', glowStrength: 20, segGap: 3, barGap: 5, radius: 3,
+    header: 'SPECTRUM', brand: 'STEREO SPECTRUM ANALYZER', model: 'SR-7700', freqs: [40, 100, 250, 1000, 4000, 16000], segments: 12 }
 ];
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -176,7 +193,7 @@ function hslHex(h, s, l) {
 const STORE_KEY = 'retroSpectrum.v1';
 const DEFAULTS = {
   source: 'line', theme: 'vfd-green', bands: 24, segments: 16, channels: 'mono', peakHold: 900, decay: 'medium',
-  labels: true, clockPanel: true, brightness: 100,
+  labels: true, clockPanel: true, scanlines: true, glow: 'off', brightness: 100,
   devices: { line: '', mic: '' },
   perSource: { line: { floor: -72, ceil: -6, tilt: true, auto: true }, mic: { floor: -95, ceil: -35, tilt: true, auto: true } },
   // What auto-sensitivity has learned about each input (dBFS): waveform noise RMS, how high that
@@ -199,7 +216,8 @@ function loadSettings() {
   } catch (e) { /* storage unavailable: defaults */ }
   if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
   if (!BAND_OPTS.includes(s.bands)) s.bands = DEFAULTS.bands;
-  if (!SEG_OPTS.includes(s.segments)) s.segments = DEFAULTS.segments;
+  s.segments = s.segments ? 16 : 0;                       // blocks (square, auto count) or smooth
+  if (!['off', 'subtle', 'full'].includes(s.glow)) s.glow = 'off';
   if (!HOLD_OPTS.includes(s.peakHold)) s.peakHold = DEFAULTS.peakHold;
   if (!DECAY_DB[s.decay]) s.decay = DEFAULTS.decay;
   if (s.source !== 'line' && s.source !== 'mic') s.source = 'line';
@@ -589,6 +607,14 @@ function drawMenu(R, ctx, cx, cy, r, t) {
 function drawFlags(R, ctx, xr, cy, size, f, t) {
   const fl = f.flags, sp = 0.16, gap = size * 1.3;
   xr -= size * 0.8;
+  // CLOCK button (rightmost): lit while the clock is shown, tap to hide / show it
+  const cw = textW(ctx, 'CLOCK', size, sp), ch = size * 2.1, clockOn = f.opts.clockPanel;
+  const cx0 = xr - cw;
+  text(ctx, 'CLOCK', cx0, cy, size, t.accent, { sp, alpha: clockOn ? 1 : 0.25, glow: clockOn && !t.inverted ? size * 0.9 : 0 });
+  ctx.save(); ctx.beginPath(); rr(ctx, cx0 - size * 0.7, cy - ch / 2, cw + size * 1.4, ch, ch / 2);
+  ctx.strokeStyle = rgba(t.accent, clockOn ? 0.45 : 0.22); ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
+  if (R.main) R.hits.clock = { x: cx0 - size * 0.7 - 10, y: cy - ch / 2 - 10, w: cw + size * 1.4 + 20, h: ch + 20 };
+  xr = cx0 - size * 0.7 - gap - size * 0.7;
   const items = [['ST', fl.st], ['DSP', fl.dsp], ['LOUD', fl.loud], ['OVER', fl.over, OVER_RED], null,
     ['LINE', fl.source === 'line'], ['MIC', fl.source === 'mic']];
   const ws = items.map(it => it ? textW(ctx, it[0], size, sp) : gap * 0.4);
@@ -628,6 +654,63 @@ function drawGlyphs(R, ctx, xr, cy, size, f, t) {
   }
   ctx.restore();
   return x;
+}
+
+/* ---------- Physical faceplates: materials, recessed windows, screws, engraving ---------- */
+function seeded(seed) { return () => (seed = (seed * 16807) % 2147483647) / 2147483647; }
+function paintBrushed(x, X, Y, W, H, base) {
+  const g = x.createLinearGradient(0, Y, 0, Y + H);
+  g.addColorStop(0, mix(base, '#FFFFFF', 0.14)); g.addColorStop(0.55, base); g.addColorStop(1, mix(base, '#000000', 0.16));
+  x.fillStyle = g; x.fillRect(X, Y, W, H);
+  const rnd = seeded(7);
+  for (let y = Y; y < Y + H; y += 0.5) {             // fine horizontal brushing
+    const a = (rnd() - 0.5) * 0.1;
+    x.fillStyle = a > 0 ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${-a})`;
+    x.fillRect(X, y, W, 0.5);
+  }
+}
+function paintWood(x, X, Y, W, H) {
+  x.fillStyle = '#4A2A17'; x.fillRect(X, Y, W, H);
+  const rnd = seeded(3 + Math.round(X));
+  x.globalAlpha = 0.7;
+  for (let i = 0; i < W; i += 0.5) {
+    const k = Math.sin(i * 0.8 + Math.sin(i * 0.09) * 3) * 0.5 + 0.5;
+    x.fillStyle = mix('#331A0C', '#7E4D2B', clamp(k * 0.65 + rnd() * 0.35, 0, 1));
+    x.fillRect(X + i, Y, 0.5, H);
+  }
+  x.globalAlpha = 1;
+  const g = x.createLinearGradient(X, 0, X + W, 0);           // rounded cheek + varnish
+  g.addColorStop(0, 'rgba(0,0,0,0.45)'); g.addColorStop(0.45, 'rgba(255,220,180,0.12)'); g.addColorStop(1, 'rgba(0,0,0,0.5)');
+  x.fillStyle = g; x.fillRect(X, Y, W, H);
+}
+function paintRecess(x, r, t) {
+  const b = Math.max(3, Math.min(r.w, r.h) * 0.02), rad = r.rad || 0, hl = t.material === 'blackash' ? 0.14 : 0.5;
+  x.save();
+  x.beginPath(); rr(x, r.x - b, r.y - b, r.w + b * 2, r.h + b * 2, rad + b);
+  const g = x.createLinearGradient(0, r.y - b, 0, r.y + r.h + b);
+  g.addColorStop(0, 'rgba(0,0,0,0.6)'); g.addColorStop(0.5, 'rgba(0,0,0,0.25)'); g.addColorStop(1, `rgba(255,255,255,${hl})`);
+  x.fillStyle = g; x.fill();
+  x.beginPath(); rr(x, r.x, r.y, r.w, r.h, rad); x.fillStyle = t.panel; x.fill();
+  x.clip();
+  const s = x.createLinearGradient(0, r.y, 0, r.y + b * 5);    // inner shadow under the top lip
+  s.addColorStop(0, 'rgba(0,0,0,0.75)'); s.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = s; x.fillRect(r.x, r.y, r.w, b * 5);
+  x.restore();
+}
+function paintScrew(x, cx, cy, r) {
+  const g = x.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.1, cx, cy, r);
+  g.addColorStop(0, '#F2F2F2'); g.addColorStop(0.6, '#9C9C9C'); g.addColorStop(1, '#4A4A4A');
+  x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fillStyle = g; x.fill();
+  x.strokeStyle = 'rgba(0,0,0,0.5)'; x.lineWidth = 1; x.stroke();
+  x.save(); x.translate(cx, cy); x.rotate(0.6);
+  x.fillStyle = 'rgba(0,0,0,0.65)'; x.fillRect(-r * 0.75, -r * 0.12, r * 1.5, r * 0.24);
+  x.restore();
+}
+// Engraved into metal (dark letters with a light lower edge), or printed for black finishes
+function engrave(x, str, X, Y, size, t, o = {}) {
+  if (t.print) return text(x, str, X, Y, size, t.print, o);
+  text(x, str, X, Y + Math.max(0.7, size * 0.07), size, 'rgba(255,255,255,0.55)', o);
+  return text(x, str, X, Y, size, 'rgba(20,18,15,0.78)', o);
 }
 
 /* ============================================================
@@ -756,6 +839,60 @@ const MOD = {
     const t = f.theme, ctx = R.ctx, cy = r.y + r.h / 2, s = r.h * 0.7;
     const w = text(ctx, 'FFT', r.x, cy, s, t.accent, { weight: 800, sp: 0.06, glow: t.glowStrength ? s * 0.35 : 0 });
     text(ctx, 'FAST FOURIER TRANSFORM', r.x + w + s * 0.6, cy, Math.max(6, s * 0.3), t.label, { sp: 0.42 });
+  },
+
+  // Static faceplate: material, screws, recessed display windows, engraved lettering (cached)
+  fascia(R, r, f, it) { R.drawFascia(f, it); f.windows = it.windows; },
+
+  // Glass over a display window: a faint diagonal reflection
+  glass(R, r, f, it) {
+    const ctx = R.ctx;
+    for (const w of it.windows) {
+      ctx.save(); ctx.beginPath(); rr(ctx, w.x, w.y, w.w, w.h, w.rad || 0); ctx.clip();
+      const g = ctx.createLinearGradient(w.x, w.y, w.x + w.w * 0.5, w.y + w.h);
+      g.addColorStop(0, 'rgba(255,255,255,0.07)'); g.addColorStop(0.4, 'rgba(255,255,255,0.015)'); g.addColorStop(0.41, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g; ctx.fillRect(w.x, w.y, w.w, w.h);
+      ctx.restore();
+    }
+  },
+
+  clockWin(R, r, f) {
+    const t = f.theme, ctx = R.ctx, ch = Math.min(r.h * 0.58, r.w / 3.6);
+    const cw = seg7W(f.clock.hm, ch), fs = Math.max(6, ch * 0.2);
+    const x0 = r.x + (r.w - cw - fs * 5) / 2;
+    seg7(ctx, f.clock.hm, x0, r.y + (r.h - ch) / 2, ch, t.accent, { glow: t.glowStrength ? ch * 0.25 : 0, ghost: 0.08 });
+    text(ctx, f.clock.dow, x0 + cw + fs * 1.2, r.y + r.h / 2 - fs * 0.8, fs, t.accent, { sp: 0.2, alpha: 0.8 });
+    text(ctx, f.clock.md, x0 + cw + fs * 1.2, r.y + r.h / 2 + fs * 0.9, fs, t.label, { sp: 0.15 });
+  },
+
+  // Front-panel controls: a metal DISPLAY push-button (opens settings) and indicator LEDs
+  controls(R, r, f) {
+    const t = f.theme, ctx = R.ctx, cy = r.y + r.h * 0.42, rad = Math.min(r.h * 0.27, r.w * 0.06);
+    const fs = Math.max(6, f.u * 1.05), bx = r.x + rad * 1.4;
+    const g = ctx.createRadialGradient(bx - rad * 0.3, cy - rad * 0.35, rad * 0.1, bx, cy, rad);
+    g.addColorStop(0, t.material === 'blackash' ? '#5A5A5A' : '#FAFAFA'); g.addColorStop(0.7, t.material === 'blackash' ? '#262626' : '#A8A8A8');
+    g.addColorStop(1, t.material === 'blackash' ? '#0E0E0E' : '#6A6A6A');
+    ctx.save();
+    ctx.beginPath(); ctx.arc(bx, cy + rad * 0.08, rad * 1.12, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(bx, cy, rad, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.restore();
+    engrave(ctx, 'DISPLAY', bx, cy + rad + fs * 1.4, fs, t, { align: 'center', sp: 0.25 });
+    if (R.main) R.hits.menu = { x: bx - rad * 1.5, y: cy - rad * 1.5, w: rad * 3, h: rad * 3 };
+    const leds = [['POWER', true, '#3BE85C'], ['SIGNAL', f.music, t.accent], ['CLIP', f.flags.over, OVER_RED]];
+    let x = bx + rad * 2 + f.u * 4;
+    const lr = Math.max(2.5, f.u * 0.65);
+    for (const [label, on, col] of leds) {
+      ctx.save();
+      ctx.beginPath(); ctx.arc(x, cy, lr * 1.5, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(x, cy, lr, 0, Math.PI * 2);
+      if (on) { ctx.shadowColor = col; ctx.shadowBlur = lr * 4; ctx.fillStyle = col; }
+      else ctx.fillStyle = mix(col, '#000000', 0.75);
+      ctx.fill();
+      ctx.restore();
+      engrave(ctx, label, x, cy + rad + fs * 1.4, fs, t, { align: 'center', sp: 0.25 });
+      x += Math.max(f.u * 8, textW(ctx, label, fs, 0.25) + f.u * 3);
+    }
   },
 
   // Overall level as a row of lamps lighting outward from the centre (KITT-style bar, but a real meter)
@@ -897,6 +1034,30 @@ const LAYOUTS = {
     return items;
   },
 
+  // A real component's front panel: engraved model line, recessed display window, controls + clock window
+  fascia(B, u, t, o) {
+    const port = B.h > B.w, items = [], topH = u * 6, botH = u * (port ? 11 : 12), side = t.material === 'walnut' ? u * 7 : 0;
+    const X = B.x + side, Wd = B.w - side * 2;
+    const win = { x: X + u * 1.5, y: B.y + topH, w: Wd - u * 3, h: B.h - topH - botH - u * 1.5, rad: u * 0.8 };
+    const rowY = win.y + win.h + u * 2.5, rowH = botH - u * 2.5;
+    const clockW = o.clockPanel ? Math.min(u * 26, win.w * 0.4) : 0;
+    const clockWin = clockW ? { x: win.x + win.w - clockW, y: rowY, w: clockW, h: rowH - u * 1.5, rad: u * 0.6 } : null;
+    const windows = clockWin ? [win, clockWin] : [win];
+    items.push({ m: 'fascia', windows, side, engr: [
+      [t.brand || 'STEREO SPECTRUM ANALYZER', win.x, B.y + topH * 0.45, u * 1.7, 'left'],
+      [t.model || '', win.x + win.w, B.y + topH * 0.45, u * 1.7, 'right']] });
+    const ip = u * 1.8, hh = u * 3.2, lh = o.labels ? u * 3 : 0;
+    items.push({ m: 'header', r: { x: win.x + ip, y: win.y + ip * 0.6, w: win.w - ip * 2, h: hh } });
+    const top = win.y + ip * 0.6 + hh + ip * 0.6;
+    const field = { x: win.x + ip, y: top, w: win.w - ip * 2, h: win.y + win.h - ip * 0.6 - lh - (lh ? u * 0.6 : 0) - top };
+    items.push({ m: 'analyser', r: field });
+    if (lh) items.push({ m: 'freqLabels', r: { x: field.x, y: field.y + field.h + u * 0.6, w: field.w, h: lh }, field });
+    if (clockWin) items.push({ m: 'clockWin', r: clockWin });
+    items.push({ m: 'controls', r: { x: win.x, y: rowY, w: win.w - clockW - u * 2, h: rowH } });
+    items.push({ m: 'glass', windows });
+    return items;
+  },
+
   // KITT-style dashboard: level bar, mirrored voice-box analyser, console lamps + clock
   kitt(B, u, t, o) {
     const port = B.h > B.w, items = [], ip = u * 2.2, hh = u * 3.6, iw = B.w - ip * 2;
@@ -947,17 +1108,17 @@ class Renderer {
     this.c = canvas; this.ctx = canvas.getContext('2d'); this.main = main;
     this.lit = document.createElement('canvas'); this.lx = this.lit.getContext('2d');
     this.grid = document.createElement('canvas'); this.gx = this.grid.getContext('2d');
-    this.bl = [0, 1, 2].map(() => { const c = document.createElement('canvas'); return { c, x: c.getContext('2d') }; });
-    this.gridKey = ''; this.hits = {}; this.pats = new Map(); this.litN = new Int16Array(64);
+    this.bl = [0, 1, 2, 3].map(() => { const c = document.createElement('canvas'); return { c, x: c.getContext('2d') }; });
+    this.gridKey = ''; this.hits = {}; this.pats = new Map(); this.crt = document.createElement('canvas'); this.crtKey = ''; this.litN = new Int16Array(64);
     this.W = 0; this.H = 0; this.dpr = 1;
   }
   resize(W, H, dpr) {
     this.W = W; this.H = H; this.dpr = dpr;
     const w = Math.round(W * dpr), h = Math.round(H * dpr);
     for (const c of [this.c, this.lit, this.grid]) { c.width = w; c.height = h; }
-    let s = 4;
+    let s = 2;                                         // 1/2, 1/4, 1/8, 1/16: halve each step (no seams)
     for (const b of this.bl) { b.c.width = Math.max(1, Math.ceil(w / s)); b.c.height = Math.max(1, Math.ceil(h / s)); s *= 2; }
-    this.gridKey = '';
+    this.gridKey = ''; this.crtKey = '';
   }
   scanPattern(col, a) {
     const k = col + a;
@@ -979,23 +1140,70 @@ class Renderer {
     f.u = u; f.scale = clamp(u / 8, 0.25, 1.5);
     const pad = Math.max(8 * f.scale, u * 2.2);
     const B = { x: s.l + pad, y: s.t + pad, w: W - s.l - s.r - pad * 2, h: H - s.t - s.b - pad * 2 };
+    f.windows = null;
     for (const it of LAYOUTS[t.layout](B, u, t, f.opts)) MOD[it.m](this, it.r, f, it);
+    if (f.opts.scanlines) this.drawCRT(t, f.windows);
   }
+  drawFascia(f, it) {
+    const t = f.theme, W = this.W, H = this.H, c = this.face || (this.face = document.createElement('canvas'));
+    const key = [this.c.width, this.c.height, t.id, JSON.stringify(it.windows), it.side].join('|');
+    if (key !== this.faceKey) {
+      this.faceKey = key; c.width = this.c.width; c.height = this.c.height;
+      const x = c.getContext('2d'), u = f.u;
+      x.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      if (it.side) {
+        paintBrushed(x, it.side, 0, W - it.side * 2, H, t.face);
+        paintWood(x, 0, 0, it.side, H); paintWood(x, W - it.side, 0, it.side, H);
+      } else paintBrushed(x, 0, 0, W, H, t.face);
+      const sr = Math.max(3, u * 0.9), si = u * 2.2 + it.side;
+      for (const [sx, sy] of [[si, u * 2.2], [W - si, u * 2.2], [si, H - u * 2.2], [W - si, H - u * 2.2]]) paintScrew(x, sx, sy, sr);
+      for (const w of it.windows) paintRecess(x, w, t);
+      for (const [s, ex, ey, size, align] of it.engr) if (s) engrave(x, s, ex, ey, size, t, { align, sp: 0.32 });
+    }
+    const ctx = this.ctx;
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(c, 0, 0); ctx.restore();
+  }
+  // CRT glass: device-pixel scanlines (dark rows plus a faint lit row between, so they show even on black),
+  // a soft sheen and vignette. Physical themes clip it to their display windows. Cached per size/theme.
+  drawCRT(t, windows) {
+    const c = this.crt, w = this.c.width, h = this.c.height, phys = !!windows;
+    const key = [w, h, this.dpr, !!t.inverted, phys].join(",");
+    if (key !== this.crtKey) {
+      this.crtKey = key; c.width = w; c.height = h;
+      const x = c.getContext("2d"), d = this.dpr;
+      const period = Math.max(3, Math.round(3 * d)), line = Math.max(1, Math.round(d)), half = Math.round(period / 2);
+      for (let y = 0; y < h; y += period) {
+        x.fillStyle = t.inverted ? "rgba(20,30,50,0.07)" : "rgba(0,0,0,0.3)"; x.fillRect(0, y, w, line);
+        x.fillStyle = t.inverted ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.028)"; x.fillRect(0, y + half, w, line);
+      }
+      if (!phys) {
+        const sh = x.createLinearGradient(0, 0, w * 0.6, h);
+        sh.addColorStop(0, "rgba(255,255,255,0.045)"); sh.addColorStop(0.45, "rgba(255,255,255,0)");
+        x.fillStyle = sh; x.fillRect(0, 0, w, h);
+        const g = x.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.hypot(w, h) * 0.55);
+        g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, t.inverted ? "rgba(20,30,50,0.12)" : "rgba(0,0,0,0.38)");
+        x.fillStyle = g; x.fillRect(0, 0, w, h);
+      }
+    }
+    const ctx = this.ctx;
+    ctx.save();
+    if (windows) { ctx.beginPath(); for (const r of windows) rr(ctx, r.x, r.y, r.w, r.h, r.rad || 0); ctx.clip(); }
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(c, 0, 0); ctx.restore();
+  }
+  // Square blocks with equal gaps across and down, snapped to device pixels so every gap is identical.
+  // The number of blocks per bar follows from the height of the field.
   geom(r, n, s, f) {
-    const t = f.theme, sc = f.scale;
-    let g = t.barGap * sc, barW = (r.w - g * (n - 1)) / n;
-    if (barW < g * 1.5) { g = Math.max(1, barW * 0.3); barW = (r.w - g * (n - 1)) / n; }
-    const G = { g, barW, cont: !s };
-    if (!s) { G.rad = Math.min(t.radius * sc, barW / 2); return G; }
-    let sg = Math.max(1, t.segGap * sc), segH = (r.h - sg * (s - 1)) / s;
-    if (segH < sg * 1.2) { sg = Math.max(0.5, segH * 0.3); segH = (r.h - sg * (s - 1)) / s; }
-    G.sg = sg; G.segH = segH;
-    if (t.radius >= 999) {
-      // Vertical capsules ~2:1. Wide bands get several capsule columns so the lamps keep their shape.
-      const target = segH * 0.5, k = Math.max(1, Math.floor((barW + sg) / (target + sg)));
-      G.k = k; G.cw = Math.min((barW - sg * (k - 1)) / k, segH * 0.62); G.rad = Math.min(G.cw, segH) / 2;
-      G.cx = (barW - (G.cw * k + sg * (k - 1))) / 2;                     // centre the capsules in the band slot
-    } else { G.k = 1; G.cw = barW; G.cx = 0; G.rad = Math.min(t.radius * sc, barW / 2, segH / 2); }
+    const t = f.theme, d = this.dpr;
+    let gD = Math.max(1, Math.round(t.barGap * f.scale * d));
+    let bwD = Math.floor((r.w * d - gD * (n - 1)) / n);
+    if (bwD < gD * 2) { gD = Math.max(1, Math.round(bwD * 0.25)); bwD = Math.floor((r.w * d - gD * (n - 1)) / n); }
+    const x0 = Math.round(r.x * d + (r.w * d - (n * bwD + (n - 1) * gD)) / 2);
+    const G = { d, x0, gD, bwD, g: gD / d, barW: bwD / d, cont: !s, k: 1 };
+    if (!s) { G.rad = Math.min(t.radius * f.scale, G.barW / 2); return G; }
+    G.s = Math.max(3, Math.floor((r.h * d + gD) / (bwD + gD)));
+    G.top = Math.round(r.y * d); G.bot = Math.round((r.y + r.h) * d);
+    G.cw = G.segH = G.barW; G.sg = G.g;
+    G.rad = t.radius >= 999 ? G.cw * 0.3 : Math.min(t.radius * f.scale, G.cw / 2);
     return G;
   }
   // [rect, direction, channel index]. Stereo: L grows up, R grows down from the centre line.
@@ -1007,7 +1215,7 @@ class Renderer {
     return [[{ x: r.x, y: r.y, w: r.w, h }, 1, 0], [{ x: r.x, y: r.y + h + gap, w: r.w, h }, -1, two ? 1 : 0]];
   }
   segXY(G, r, dir, i, c, j) {
-    return [r.x + i * (G.barW + G.g) + G.cx + c * (G.cw + G.sg), dir > 0 ? r.y + r.h - (j + 1) * G.segH - j * G.sg : r.y + j * (G.segH + G.sg)];
+    return [(G.x0 + i * (G.bwD + G.gD)) / G.d, (dir > 0 ? G.bot - (j + 1) * G.bwD - j * G.gD : G.top + j * (G.bwD + G.gD)) / G.d];
   }
   drawAnalyser(r, f) {
     const t = f.theme, ctx = this.ctx, n = f.chans[0].v.length, s = f.segs, halves = this.halves(r, f);
@@ -1022,14 +1230,12 @@ class Renderer {
       for (const [hr, dir] of halves) {
         const G = this.geom(hr, n, s, f);
         for (let i = 0; i < n; i++) {
-          if (G.cont) { rr(g, hr.x + i * (G.barW + G.g), hr.y, G.barW, hr.h, G.rad); continue; }
-          for (let c = 0; c < G.k; c++) for (let j = 0; j < s; j++) { const [x, y] = this.segXY(G, hr, dir, i, c, j); rr(g, x, y, G.cw, G.segH, G.rad); }
+          if (G.cont) { rr(g, (G.x0 + i * (G.bwD + G.gD)) / G.d, hr.y, G.barW, hr.h, G.rad); continue; }
+          for (let j = 0; j < G.s; j++) { const [x, y] = this.segXY(G, hr, dir, i, 0, j); rr(g, x, y, G.cw, G.segH, G.rad); }
         }
       }
       g.fill(); g.globalAlpha = 1;
     }
-    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(this.grid, 0, 0); ctx.restore();
-
     // 2. lit segments + peak caps on their own layer
     const lx = this.lx, LW = this.lit.width, LH = this.lit.height;
     lx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1040,22 +1246,23 @@ class Renderer {
       lx.fillRect(0, 0, LW, LH); lx.globalCompositeOperation = 'source-over';
     } else lx.clearRect(0, 0, LW, LH);
     lx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    for (const [hr, dir, ci] of halves) this.drawLit(lx, hr, dir, this.geom(hr, n, s, f), f.chans[ci], f, n, s);
+    for (const [hr, dir, ci] of halves) { const G = this.geom(hr, n, s, f); this.drawLit(lx, hr, dir, G, f.chans[ci], f, n, G.s || 0); }
 
-    // 3. bloom: downsampled copies of the lit layer, added back generously, then the crisp layer on top
+    // 3. glow (optional) goes BEHIND the blocks: the opaque unlit grid and the lit blocks are drawn over it,
+    //    so every block keeps a crisp edge and only the gaps pick up a soft wash.
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-    if (t.glowStrength > 0) {
+    const k = f.glow * t.glowStrength / 22;
+    if (k > 0) {
       let src = this.lit;
-      for (const b of this.bl) { b.x.globalCompositeOperation = 'copy'; b.x.imageSmoothingEnabled = true; b.x.drawImage(src, 0, 0, b.c.width, b.c.height); src = b.c; }
-      const k = t.glowStrength / 22;
+      for (const b of this.bl) { b.x.clearRect(0, 0, b.c.width, b.c.height); b.x.imageSmoothingEnabled = true; b.x.drawImage(src, 0, 0, b.c.width, b.c.height); src = b.c; }
       ctx.imageSmoothingEnabled = true; ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = Math.min(1, 0.95 * k); ctx.drawImage(this.bl[2].c, 0, 0, LW, LH);
-      ctx.globalAlpha = Math.min(1, 0.8 * k); ctx.drawImage(this.bl[1].c, 0, 0, LW, LH);
-      ctx.globalAlpha = Math.min(1, 0.55 * k); ctx.drawImage(this.bl[0].c, 0, 0, LW, LH);
+      ctx.globalAlpha = Math.min(1, 0.9 * k); ctx.drawImage(this.bl[3].c, 0, 0, LW, LH);
+      ctx.globalAlpha = Math.min(1, 0.7 * k); ctx.drawImage(this.bl[2].c, 0, 0, LW, LH);
+      ctx.globalAlpha = Math.min(1, 0.45 * k); ctx.drawImage(this.bl[1].c, 0, 0, LW, LH);
       ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
     }
+    ctx.drawImage(this.grid, 0, 0);
     ctx.drawImage(this.lit, 0, 0);
-    if (t.scanlines) { ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); ctx.fillStyle = this.scanPattern('#000000', 0.3); ctx.fillRect(r.x, r.y, r.w, r.h); }
     ctx.restore();
   }
   drawLit(x, r, dir, G, ch, f, n, s) {
@@ -1066,7 +1273,7 @@ class Renderer {
       if (!band) { grad = dir > 0 ? x.createLinearGradient(0, r.y + r.h, 0, r.y) : x.createLinearGradient(0, r.y, 0, r.y + r.h); colourStops(grad, t); }
       const ct = Math.max(2, r.h * 0.018);
       for (let i = 0; i < n; i++) {
-        const bx = r.x + i * (G.barW + G.g), h = ch.v[i] * r.h;
+        const bx = (G.x0 + i * (G.bwD + G.gD)) / G.d, h = ch.v[i] * r.h;
         if (h > 0.5) { x.beginPath(); rr(x, bx, dir > 0 ? r.y + r.h - h : r.y, G.barW, h, G.rad); x.fillStyle = band ? bandCol(i) : grad; x.fill(); }
         if (f.holdOn && ch.p[i] > 0.01) {
           const py = clamp(dir > 0 ? r.y + r.h - ch.p[i] * r.h - ct * 0.5 : r.y + ch.p[i] * r.h - ct * 0.5, r.y, r.y + r.h - ct);
@@ -1193,7 +1400,7 @@ function thumbFrame(t) {
     v[i] = clamp(0.8 - 0.45 * (i / n) + 0.17 * Math.sin(i * 1.7) + 0.08 * Math.cos(i * 0.6), 0.06, 0.94);
     p[i] = Math.min(1, v[i] + 0.07 + 0.05 * ((i * 7) % 3));
   }
-  return { now: 0, theme: t, chans: [{ v, p }], segs: t.segments ?? 16, opts: { labels: true, clockPanel: true },
+  return { now: 0, theme: t, chans: [{ v, p }], segs: t.segments ?? 16, glow: 0, opts: { labels: true, clockPanel: true, scanlines: true },
     flags: { st: true, dsp: true, loud: true, over: false, source: 'line' }, autoOn: true, music: true, clock: { hm: '12:33', mdSlash: '10/05', md: '10-5', dow: 'MON' },
     battery: 40, sr: 48000, sig: 0.6, level: 0.5, safe: null, holdOn: true };
 }
@@ -1247,7 +1454,8 @@ function buildSettings() {
     THEMES.map(t => `<button class="card" data-theme="${t.id}" style="background:${t.panel};border-color:${t.id === S.theme ? t.accent : 'transparent'}">` +
       `<span style="color:${t.accent}">${t.name.toUpperCase()}</span></button>`).join('') + `</div></div>` +
     optRow('BANDS', 'bands', BAND_OPTS.map(v => [v, v]), S.bands, P.bandCap < S.bands ? 'REDUCED FOR SPEED: ' + effBands() : '') +
-    optRow('SEGMENTS', 'segments', SEG_OPTS.map(v => [v, v || 'CONT']), S.segments) +
+    optRow('BARS', 'segments', [[16, 'BLOCKS'], [0, 'SMOOTH']], S.segments ? 16 : 0) +
+    optRow('GLOW', 'glow', [['off', 'OFF'], ['subtle', 'SUBTLE'], ['full', 'FULL']], S.glow, 'BEHIND THE BLOCKS') +
     optRow('CHANNELS', 'channels', [['mono', 'MONO'], ['stereo', 'STEREO']], mic ? 'mono' : S.channels, mic ? 'MIC IS MONO' : '', v => mic && v === 'stereo') +
     optRow('PEAK HOLD', 'peakHold', HOLD_OPTS.map(v => [v, v ? v + ' MS' : 'OFF']), S.peakHold) +
     optRow('DECAY', 'decay', [['slow', 'SLOW'], ['medium', 'MEDIUM'], ['fast', 'FAST']], S.decay) +
@@ -1259,7 +1467,8 @@ function buildSettings() {
       : sliderRow('FLOOR', sn, 'floor', -100, -40, ps.floor) + sliderRow('CEILING', sn, 'ceil', -60, 0, ps.ceil)) +
     optRow('TILT', 'tilt', onOff, ps.tilt, sn + ' &middot; +3 DB/OCT') +
     optRow('LABELS', 'labels', onOff, S.labels) +
-    optRow('CLOCK PANEL', 'clockPanel', onOff, S.clockPanel) +
+    optRow('CLOCK PANEL', 'clockPanel', onOff, S.clockPanel, 'OR TAP CLOCK IN HEADER') +
+    optRow('SCANLINES', 'scanlines', onOff, S.scanlines) +
     `<div class="row"><div class="lbl">INPUT DEVICE<small>${sn}</small></div><select id="devSel">${devOpts}</select></div>` +
     sliderRow('BRIGHTNESS', '', 'brightness', 20, 100, S.brightness, '%') +
     `<div class="note">${status}<br>` +
@@ -1294,7 +1503,7 @@ $('settings').addEventListener('click', e => {
   if (b.dataset.theme) {
     S.theme = b.dataset.theme;
     const t = theme();
-    if (t.segments !== undefined) S.segments = t.segments;
+    if (t.segments !== undefined) S.segments = t.segments ? 16 : 0;
     save(); applyTheme(); buildSettings();
     return;
   }
@@ -1342,7 +1551,10 @@ cv.addEventListener('pointerup', e => {
   const d = ptrs.get(e.pointerId);
   ptrs.delete(e.pointerId);
   cancelLP();
-  if (d && ptrs.size === 0 && performance.now() - d.t < 500 && inRect({ x: e.clientX, y: e.clientY }, R.hits.menu)) openSettings();
+  if (!d || ptrs.size !== 0 || performance.now() - d.t >= 500) return;
+  const p = { x: e.clientX, y: e.clientY };
+  if (inRect(p, R.hits.menu)) openSettings();
+  else if (inRect(p, R.hits.clock)) { S.clockPanel = !S.clockPanel; save(); }
 });
 cv.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); cancelLP(); });
 document.addEventListener('keydown', e => {
@@ -1408,7 +1620,7 @@ function frame(now) {
   R.render({
     now, dt, theme: t, autoOn: ps.auto, music: P.music,
     chans: stereoDisplay() ? [P.chans.L, P.chans.R] : [P.chans.M],
-    segs: S.segments, opts: { labels: S.labels, clockPanel: S.clockPanel },
+    segs: S.segments, glow: { off: 0, subtle: 0.25, full: 0.55 }[S.glow], opts: { labels: S.labels, clockPanel: S.clockPanel, scanlines: S.scanlines },
     flags: { st: A.live && A.stereo, dsp: ps.tilt || S.source === 'mic', loud: now < P.loudUntil, over: now < P.overUntil, source: S.source },
     clock: clock(), battery: BAT.pct, sr: P.sr, sig: P.sig, level: P.level, safe: SAFE, holdOn: S.peakHold > 0
   });
