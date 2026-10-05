@@ -181,7 +181,10 @@ const DEFAULTS = {
   source: 'line', theme: 'vfd-green', bands: 24, segments: 16, channels: 'mono', peakHold: 900, decay: 'medium',
   labels: true, clockPanel: true, brightness: 100,
   devices: { line: '', mic: '' },
-  perSource: { line: { floor: -72, ceil: -6, tilt: true }, mic: { floor: -95, ceil: -35, tilt: true } }
+  perSource: { line: { floor: -72, ceil: -6, tilt: true, auto: true }, mic: { floor: -95, ceil: -35, tilt: true, auto: true } },
+  // What auto-sensitivity has learned about each input (dBFS): waveform noise RMS, how high that
+  // noise reads in the bands, and the loud-music reference the ceiling follows.
+  learn: { line: { noise: -85, noiseBand: -95, ref: -12 }, mic: { noise: -65, noiseBand: -80, ref: -40 } }
 };
 function loadSettings() {
   const s = JSON.parse(JSON.stringify(DEFAULTS));
@@ -192,7 +195,7 @@ function loadSettings() {
       for (const k of Object.keys(DEFAULTS)) {
         if (o[k] === undefined) continue;
         if (k === 'devices') Object.assign(s.devices, o.devices);
-        else if (k === 'perSource') { for (const sk of ['line', 'mic']) if (o.perSource[sk]) Object.assign(s.perSource[sk], o.perSource[sk]); }
+        else if (k === 'perSource' || k === 'learn') { for (const sk of ['line', 'mic']) if (o[k][sk]) Object.assign(s[k][sk], o[k][sk]); }
         else s[k] = o[k];
       }
     }
@@ -337,8 +340,11 @@ function buildDemo(source) {
   const L = gain(1), R = gain(1), cR = gain(0.7), hL = gain(0.5), out = ctx.createChannelMerger(2);
   lp.connect(L); lp.connect(R); clp.connect(L); clp.connect(cR); cR.connect(R); hats.connect(hL); hL.connect(L); hats.connect(R);
   L.connect(out, 0, 0); R.connect(out, 0, 1);
-  A.demo = oscs; A.deviceLabel = 'DEMO SIGNAL';
-  wireGraph(out, source, source === 'line');
+  // Faint hiss stands in for the interface's noise floor; 'm' mutes the "music" to test silence.
+  const hiss = gain(0.0003), mute = gain(1), sum = gain(1);
+  noise.connect(hiss); hiss.connect(sum); out.connect(mute); mute.connect(sum);
+  A.demo = oscs; A.demoMute = mute; A.deviceLabel = 'DEMO SIGNAL';
+  wireGraph(sum, source, source === 'line');
 }
 
 function onInputLost() {
@@ -382,8 +388,8 @@ function effBands() {
   while (n > P.bandCap && BAND_OPTS.indexOf(n) > 0) n = BAND_OPTS[BAND_OPTS.indexOf(n) - 1];
   return n;
 }
-const newChan = n => ({ db: new Float32Array(n).fill(-200), v: new Float32Array(n), p: new Float32Array(n),
-  hold: new Float64Array(n), vel: new Float32Array(n) });
+const newChan = n => ({ db: new Float32Array(n).fill(-200), raw: new Float32Array(n).fill(-200), v: new Float32Array(n),
+  p: new Float32Array(n), hold: new Float64Array(n), vel: new Float32Array(n) });
 
 function setupBands() {
   const n = effBands(), sr = A.ctx ? A.ctx.sampleRate : 48000, binHz = sr / FFT, maxBin = FFT / 2 - 1, ratio = F_HI / F_LO;
@@ -402,23 +408,83 @@ function setupBands() {
 
 const stereoDisplay = () => S.channels === 'stereo' && S.source === 'line' && A.stereo;
 
+/* ---------- Auto-sensitivity ----------
+   Gate: learn the input's idle noise; "music" = waveform RMS 10 dB above it (closes at +6 dB after 1.5 s).
+   Window: the ceiling follows the loudest band while music plays (fast up, 0.1 dB/s down, so quiet
+   passages are not pumped up), and the floor sits above the idle noise so silence shows nothing. */
+const AUTO_SPAN = { line: 50, mic: 45 };
+const GATE = { open: false, lastLoud: 0, hist: [], lastSample: 0 };
+function learn(a, rms, fmax, dt, now) {
+  if (rms < -150) return;                              // empty buffer / digital zero: nothing to learn
+  // Hiss is very steady; music never is. A level that holds within ~0.6 dB for 5 s is the noise floor.
+  if (now - GATE.lastSample >= 100) {
+    GATE.lastSample = now;
+    GATE.hist.push(rms);
+    if (GATE.hist.length > 50) GATE.hist.shift();
+    if (GATE.hist.length === 50) {
+      const mean = GATE.hist.reduce((s, x) => s + x, 0) / 50;
+      const sd = Math.sqrt(GATE.hist.reduce((s, x) => s + (x - mean) ** 2, 0) / 50);
+      if (sd < 0.6 && mean < -40 && mean > a.noise + 6) a.noise = mean - 1;
+    }
+  }
+  if (rms < a.noise) a.noise += (rms - a.noise) * Math.min(1, dt / 0.25);
+  else if (rms < a.noise + 10) a.noise += Math.min(rms - a.noise, 0.5 * dt);
+  a.noise = Math.max(a.noise, -120);
+  const open = Math.max(a.noise + 10, -90), close = Math.max(a.noise + 6, -94);
+  if (rms > open || (GATE.open && rms > close)) { GATE.open = true; GATE.lastLoud = now; }
+  else if (GATE.open && now - GATE.lastLoud > 1500) GATE.open = false;
+  if (!GATE.open) a.noiseBand += (fmax - a.noiseBand) * Math.min(1, dt / (fmax < a.noiseBand ? 0.5 : 4));
+  else if (fmax > a.ref) a.ref += (fmax - a.ref) * Math.min(1, dt / 0.25);
+  else a.ref -= 0.1 * dt;
+  a.ref = clamp(a.ref, a.noiseBand + 25, 0);
+}
+function autoWindow() {
+  const a = S.learn[S.source], ceil = Math.min(0, a.ref - 2);
+  return [Math.min(Math.max(ceil - AUTO_SPAN[S.source], a.noiseBand + 3), ceil - 20), ceil];
+}
+function relearn() {
+  S.learn[S.source] = JSON.parse(JSON.stringify(DEFAULTS.learn[S.source]));
+  GATE.open = false; GATE.hist = [];
+  save();
+}
+
 function process(now, dt) {
-  const ps = S.perSource[S.source];
-  const floor = ps.floor, span = Math.max(ps.ceil, ps.floor + 6) - floor;
-  const decay = DECAY_DB[S.decay] * dt, holdMs = S.peakHold;
+  const ps = S.perSource[S.source], keys = stereoDisplay() ? ['L', 'R'] : ['M'];
+  const live = App.running && A.live;
+  let rms = -200, fmax = -200;
+  for (const k of keys) {
+    const ch = P.chans[k];
+    if (!live) { ch.raw.fill(-200); continue; }
+    const an = k === 'L' ? A.aL : k === 'R' ? A.aR : A.aM;
+    an.getFloatFrequencyData(P.fbuf);
+    for (let i = 0; i < P.n; i++) {
+      let m = -200;
+      for (let b = P.lo[i]; b <= P.hi[i]; b++) { const x = P.fbuf[b]; if (x > m) m = x; }   // max, not mean
+      if (ps.tilt) m += P.tilt[i];
+      ch.raw[i] = m;
+      if (m > fmax) fmax = m;
+    }
+    // LOUD / OVER from the waveform: a true sample peak is a real clipping indicator.
+    an.getFloatTimeDomainData(P.tbuf);
+    let pk = 0, ss = 0;
+    for (let j = 0; j < P.tbuf.length; j++) { const a = P.tbuf[j]; ss += a * a; if (a > pk) pk = a; else if (-a > pk) pk = -a; }
+    rms = Math.max(rms, 10 * Math.log10(ss / P.tbuf.length + 1e-20));
+    if (pk >= 0.98) P.overUntil = now + 1000;
+    if (pk >= 0.1) P.loudUntil = now + 2000;           // -20 dBFS
+  }
+  if (live && ps.auto) learn(S.learn[S.source], rms, fmax, dt, now);
+  const gate = !ps.auto || GATE.open;
+  const [floor, ceil] = ps.auto ? autoWindow() : [ps.floor, Math.max(ps.ceil, ps.floor + 6)];
+  P.window = [floor, ceil];
+  P.music = live && gate;
+  const span = ceil - floor, decay = DECAY_DB[S.decay] * dt, holdMs = S.peakHold;
   const fall0 = (1 / (S.segments || 16)) / 0.12;        // ~1 segment per 120 ms, then accelerating
   P.fade += clamp(P.fadeTarget - P.fade, -dt / 0.15, dt / 0.15);
   let sig = 0;
-  for (const k of stereoDisplay() ? ['L', 'R'] : ['M']) {
+  for (const k of keys) {
     const ch = P.chans[k];
-    const an = App.running && A.live ? (k === 'L' ? A.aL : k === 'R' ? A.aR : A.aM) : null;
-    if (an) an.getFloatFrequencyData(P.fbuf);
     for (let i = 0; i < P.n; i++) {
-      let m = -200;
-      if (an) {
-        for (let b = P.lo[i]; b <= P.hi[i]; b++) { const x = P.fbuf[b]; if (x > m) m = x; }   // max, not mean
-        if (ps.tilt) m += P.tilt[i];
-      }
+      const m = gate ? ch.raw[i] : -200;              // gate closed: bars sink to nothing
       // instant attack, linear-in-dB (exponential) decay
       ch.db[i] = m > ch.db[i] ? m : Math.max(m, ch.db[i] - decay);
       const v = clamp((ch.db[i] - floor) / span, 0, 1) * P.fade;
@@ -427,14 +493,6 @@ function process(now, dt) {
       if (holdMs <= 0) { ch.p[i] = 0; continue; }
       if (v >= ch.p[i]) { ch.p[i] = v; ch.hold[i] = now + holdMs; ch.vel[i] = fall0; }
       else if (now > ch.hold[i]) { ch.p[i] = Math.max(v, ch.p[i] - ch.vel[i] * dt); ch.vel[i] += fall0 * 4 * dt; }
-    }
-    if (an) {
-      // LOUD / OVER from the waveform: a true sample peak is a real clipping indicator.
-      an.getFloatTimeDomainData(P.tbuf);
-      let pk = 0;
-      for (let j = 0; j < P.tbuf.length; j++) { const a = Math.abs(P.tbuf[j]); if (a > pk) pk = a; }
-      if (pk >= 0.98) P.overUntil = now + 1000;
-      if (pk >= 0.1) P.loudUntil = now + 2000;           // -20 dBFS
     }
   }
   P.sig = sig;
@@ -1156,6 +1214,7 @@ async function switchSource(to, force) {
   if (UI.open) buildSettings();
   if (!App.running) { if (App.overlay === 'start') showStart(); return; }
   App.busy = true;
+  GATE.open = false; GATE.hist = [];
   P.fadeTarget = 0;
   await sleep(170);
   try { await openSource(to); P.fadeTarget = 1; requestWake(); }
@@ -1210,6 +1269,11 @@ function sliderRow(label, sub, key, min, max, val, unit) {
   return `<div class="row"><div class="lbl">${label}${sub ? `<small>${sub}</small>` : ''}</div><div class="slider">` +
     `<input type="range" min="${min}" max="${max}" step="1" value="${val}" data-s="${key}"><span class="val" id="v-${key}">${fmtVal(val, unit)}</span></div></div>`;
 }
+function autoStatus() {
+  const w = P.window || autoWindow(), d = v => '−' + Math.abs(Math.round(v));
+  return `${d(w[0])} TO ${d(w[1])} dBFS · ${!App.running ? 'IDLE' : P.music ? 'MUSIC' : 'SILENCE'}`;
+}
+setInterval(() => { const el = $('autoStat'); if (UI.open && el) el.textContent = autoStatus(); }, 400);
 const fmtVal = (v, unit) => unit === '%' ? v + '%' : (v < 0 ? '−' + Math.abs(v) : v) + ' dBFS';
 const onOff = [[true, 'ON'], [false, 'OFF']];
 
@@ -1233,8 +1297,12 @@ function buildSettings() {
     optRow('CHANNELS', 'channels', [['mono', 'MONO'], ['stereo', 'STEREO']], mic ? 'mono' : S.channels, mic ? 'MIC IS MONO' : '', v => mic && v === 'stereo') +
     optRow('PEAK HOLD', 'peakHold', HOLD_OPTS.map(v => [v, v ? v + ' MS' : 'OFF']), S.peakHold) +
     optRow('DECAY', 'decay', [['slow', 'SLOW'], ['medium', 'MEDIUM'], ['fast', 'FAST']], S.decay) +
-    sliderRow('FLOOR', sn, 'floor', -100, -40, ps.floor) +
-    sliderRow('CEILING', sn, 'ceil', -60, 0, ps.ceil) +
+    optRow('SENSITIVITY', 'auto', [[true, 'AUTO'], [false, 'MANUAL']], ps.auto, sn) +
+    (ps.auto
+      ? `<div class="row"><div class="lbl">AUTO LEVEL<small>LEARNS AS IT LISTENS</small></div><div class="opts" style="align-items:center;gap:14px">` +
+        `<span class="val" id="autoStat" style="text-align:left;min-width:0;flex:1">${autoStatus()}</span>` +
+        `<button class="opt" data-act="relearn">RELEARN</button></div></div>`
+      : sliderRow('FLOOR', sn, 'floor', -100, -40, ps.floor) + sliderRow('CEILING', sn, 'ceil', -60, 0, ps.ceil)) +
     optRow('TILT', 'tilt', onOff, ps.tilt, sn + ' &middot; +3 DB/OCT') +
     optRow('LABELS', 'labels', onOff, S.labels) +
     optRow('CLOCK PANEL', 'clockPanel', onOff, S.clockPanel) +
@@ -1268,6 +1336,7 @@ $('settings').addEventListener('click', e => {
   const b = e.target.closest('[data-k],[data-theme],[data-act]');
   if (!b || b.disabled) return;
   if (b.dataset.act === 'close') { closeSettings(); return; }
+  if (b.dataset.act === 'relearn') { relearn(); buildSettings(); return; }
   if (b.dataset.theme) {
     S.theme = b.dataset.theme;
     const t = theme();
@@ -1278,7 +1347,7 @@ $('settings').addEventListener('click', e => {
   const k = b.dataset.k, raw = b.dataset.v;
   const v = raw === 'true' ? true : raw === 'false' ? false : /^-?\d+$/.test(raw) ? +raw : raw;
   if (k === 'source') { switchSource(v); return; }
-  if (k === 'tilt') S.perSource[S.source].tilt = v;
+  if (k === 'tilt' || k === 'auto') S.perSource[S.source][k] = v;
   else S[k] = v;
   if (k === 'bands') P.bandCap = 99;
   save(); buildSettings();
@@ -1325,6 +1394,7 @@ cv.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); cancelLP()
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeSettings();
   else if (e.key === 's' && !UI.open) openSettings();
+  else if (e.key === 'm' && DEMO && A.demoMute) A.demoMute.gain.value = A.demoMute.gain.value ? 0 : 1;
 });
 document.addEventListener('gesturestart', e => e.preventDefault());   // iOS pinch-zoom
 
@@ -1371,12 +1441,13 @@ function perf(ms, now) {
   } else P.slowSince = 0;
 }
 
-let lastT = performance.now();
+let lastT = performance.now(), lastLearnSave = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const ms = now - lastT, dt = Math.min(0.1, ms / 1000);
   lastT = now;
   perf(ms, now);
+  if (App.running && now - lastLearnSave > 20000) { lastLearnSave = now; save(); }   // keep what auto-level learned
   if (P.n !== effBands()) setupBands();
   process(now, dt);
   const t = resolveTheme(theme(), now), ps = S.perSource[S.source];
