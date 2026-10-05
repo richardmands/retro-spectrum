@@ -194,7 +194,7 @@ function hslHex(h, s, l) {
 const STORE_KEY = 'retroSpectrum.v1';
 const DEFAULTS = {
   source: 'line', theme: 'vfd-green', bands: 24, segments: 16, channels: 'mono', peakHold: 900, decay: 'medium',
-  labels: true, clockPanel: true, scanlines: true, glow: 'off', fullscreen: true, brightness: 100,
+  labels: true, clockPanel: true, scanlines: true, glow: 'off', fullscreen: true, barsOnly: false, brightness: 100,
   devices: { line: '', mic: '' },
   perSource: { line: { floor: -72, ceil: -6, tilt: true, auto: true }, mic: { floor: -95, ceil: -35, tilt: true, auto: true } },
   // What auto-sensitivity has learned about each input (dBFS): waveform noise RMS, how high that
@@ -751,12 +751,15 @@ const MOD = {
     const t = f.theme, ctx = R.ctx, cy = r.y + r.h / 2;
     let x = r.x;
     if (it.menu) { const mr = r.h * 0.46; drawMenu(R, ctx, x + mr, cy, mr, t); x += mr * 2 + r.h * 0.5; }
-    const size = Math.max(6, r.h * 0.4), glow = t.glowStrength ? size * 0.8 : 0;
+    const size = Math.max(f.minFont, r.h * 0.4), glow = t.glowStrength ? size * 0.8 : 0;
     const label = (t.header || '').replace('{SR}', (f.sr / 1000) + 'kHz');
-    const lw = text(ctx, label, x, cy, size, t.headerColour || t.accent, { sp: 0.22, glow, alpha: 0.92 });
     let xr = r.x + r.w;
     if (it.glyphs) xr = drawGlyphs(R, ctx, xr, cy, size, f, t) - size * 1.2;
     const fx = drawFlags(R, ctx, xr, cy, size * 0.9, f, t);
+    // Title only if it fits beside the flags (narrow phones drop it rather than overlap)
+    let lw = textW(ctx, label, size, 0.22);
+    if (x + lw + size * 1.5 <= fx) text(ctx, label, x, cy, size, t.headerColour || t.accent, { sp: 0.22, glow, alpha: 0.92 });
+    else lw = 0;
     if (t.headerRight) {
       const hw = textW(ctx, t.headerRight, size, 0.22);
       if (fx - size * 1.5 - hw > x + lw + size * 2)
@@ -768,7 +771,7 @@ const MOD = {
   analyser(R, r, f) { R.drawAnalyser(r, f); },
 
   freqLabels(R, r, f, it) {
-    const t = f.theme, ctx = R.ctx, F = it.field, size = Math.max(6, r.h * 0.5), lr = Math.log(F_HI / F_LO);
+    const t = f.theme, ctx = R.ctx, F = it.field, size = Math.max(f.minFont, r.h * 0.5), lr = Math.log(F_HI / F_LO);
     let lastR = -1e9;
     for (const hz of t.freqs) {
       const s = hz >= 1000 ? (hz / 1000) + 'k' : String(hz), w = textW(ctx, s, size, 0.1);
@@ -780,7 +783,7 @@ const MOD = {
   },
 
   footer(R, r, f) {
-    const t = f.theme, ctx = R.ctx, size = Math.max(6, r.h * 0.42), cy = r.y + r.h / 2, cx = r.x + r.w / 2;
+    const t = f.theme, ctx = R.ctx, size = Math.max(f.minFont, r.h * 0.42), cy = r.y + r.h / 2, cx = r.x + r.w / 2;
     const w = text(ctx, t.footer || '', cx, cy, size, t.label, { align: 'center', sp: 0.45 }), g = size * 1.5;
     ctx.fillStyle = rgba(t.label, 0.45);
     ctx.fillRect(r.x, cy, Math.max(0, cx - w / 2 - g - r.x), 1);
@@ -804,13 +807,13 @@ const MOD = {
       let x = b.x;
       const ch = Math.min(b.h * 0.8, (b.x + b.w - x) * 0.6 / 2.9);
       seg7(ctx, f.clock.hm, b.x + b.w, b.y + (b.h - ch) / 2, ch, t.accent, { align: 'right', glow: gl * ch, ghost: 0.07 });
-      const fs = Math.max(6, Math.min(b.h * 0.15, 15));
+      const fs = Math.max(f.minFont, Math.min(b.h * 0.15, 15));
       text(ctx, cap, x, b.y + b.h * 0.36, fs, t.accent, { sp: 0.32, alpha: 0.9 });
       text(ctx, dateLine, x, b.y + b.h * 0.64, fs, t.label, { sp: 0.22 });
       return;
     }
     if (v === 'stack') {                   // caption / CLOCK / date, left-aligned
-      const fs = Math.max(6, b.h * 0.11), ch = Math.min(b.h * 0.5, b.w / 2.95);
+      const fs = Math.max(f.minFont, b.h * 0.11), ch = Math.min(b.h * 0.5, b.w / 2.95);
       const total = fs * 2 + ch + fs * 2.2, y0 = b.y + Math.max(0, (b.h - total) / 2);
       text(ctx, cap, b.x, y0 + fs * 0.6, fs, t.label, { sp: 0.32 });
       seg7(ctx, f.clock.hm, b.x, y0 + fs * 1.8, ch, t.accent, { glow: gl * ch, ghost: 0.07 });
@@ -818,7 +821,7 @@ const MOD = {
       return;
     }
     // 'v': tall — tile, caption, very large clock, date
-    const fs = Math.max(6, Math.min(b.w * 0.045, 16));
+    const fs = Math.max(f.minFont, Math.min(b.w * 0.045, 16));
     const ch = Math.min(b.w / 2.95, b.h * 0.3);
     const total = fs * 1.6 + ch + fs * 2.6;
     let y = b.y + Math.max(0, (b.h - total) / 2);
@@ -828,7 +831,7 @@ const MOD = {
   },
 
   scaleMarks(R, r, f, it) {
-    const t = f.theme, ctx = R.ctx, F = it.field, size = Math.max(6, f.u * 1.3), x = r.x + r.w;
+    const t = f.theme, ctx = R.ctx, F = it.field, size = Math.max(f.minFont, f.u * 1.3), x = r.x + r.w;
     const marks = [['+12', F.y + size * 0.6], ['0', F.y + F.h / 2], ['−12', F.y + F.h - size * 0.6]];
     for (const [s, y] of marks) {
       text(ctx, s, x - size * 0.9, y, size, t.label, { align: 'right', sp: 0.05 });
@@ -839,7 +842,7 @@ const MOD = {
   caption(R, r, f) {
     const t = f.theme, ctx = R.ctx, cy = r.y + r.h / 2, s = r.h * 0.7;
     const w = text(ctx, 'FFT', r.x, cy, s, t.accent, { weight: 800, sp: 0.06, glow: t.glowStrength ? s * 0.35 : 0 });
-    text(ctx, 'FAST FOURIER TRANSFORM', r.x + w + s * 0.6, cy, Math.max(6, s * 0.3), t.label, { sp: 0.42 });
+    text(ctx, 'FAST FOURIER TRANSFORM', r.x + w + s * 0.6, cy, Math.max(f.minFont, s * 0.3), t.label, { sp: 0.42 });
   },
 
   // Static faceplate: material, screws, recessed display windows, engraved lettering (cached)
@@ -859,7 +862,7 @@ const MOD = {
 
   clockWin(R, r, f) {
     const t = f.theme, ctx = R.ctx, ch = Math.min(r.h * 0.58, r.w / 3.6);
-    const cw = seg7W(f.clock.hm, ch), fs = Math.max(6, ch * 0.2);
+    const cw = seg7W(f.clock.hm, ch), fs = Math.max(f.minFont, ch * 0.2);
     const x0 = r.x + (r.w - cw - fs * 5) / 2;
     seg7(ctx, f.clock.hm, x0, r.y + (r.h - ch) / 2, ch, t.accent, { glow: t.glowStrength ? ch * 0.25 : 0, ghost: 0.08 });
     text(ctx, f.clock.dow, x0 + cw + fs * 1.2, r.y + r.h / 2 - fs * 0.8, fs, t.accent, { sp: 0.2, alpha: 0.8 });
@@ -869,7 +872,7 @@ const MOD = {
   // Front-panel controls: a metal DISPLAY push-button (opens settings) and indicator LEDs
   controls(R, r, f) {
     const t = f.theme, ctx = R.ctx, cy = r.y + r.h * 0.42, rad = Math.min(r.h * 0.27, r.w * 0.06);
-    const fs = Math.max(6, f.u * 1.05), bx = r.x + rad * 1.4;
+    const fs = Math.max(f.minFont, f.u * 1.05), bx = r.x + rad * 1.4;
     const g = ctx.createRadialGradient(bx - rad * 0.3, cy - rad * 0.35, rad * 0.1, bx, cy, rad);
     g.addColorStop(0, t.material === 'blackash' ? '#5A5A5A' : '#FAFAFA'); g.addColorStop(0.7, t.material === 'blackash' ? '#262626' : '#A8A8A8');
     g.addColorStop(1, t.material === 'blackash' ? '#0E0E0E' : '#6A6A6A');
@@ -927,7 +930,7 @@ const MOD = {
       ctx.fill(); ctx.shadowBlur = 0;
       ctx.strokeStyle = rgba(lit, on ? 0.9 : 0.35); ctx.lineWidth = 1; ctx.stroke();
       ctx.restore();
-      const size = Math.max(6, Math.min(bh * 0.24, bw / (label.length * 0.85)));
+      const size = Math.max(f.minFont, Math.min(bh * 0.24, bw / (label.length * 0.85)));
       text(ctx, label, x + bw / 2, by + bh / 2, size, on ? '#1A0200' : rgba(lit, 0.55), { align: 'center', sp: 0.12, weight: 700 });
     });
     if (cw) seg7(ctx, f.clock.hm, r.x + r.w / 2, r.y + (r.h - ch) / 2, ch, t.accent, { align: 'center', glow: ch * 0.25, ghost: 0.1 });
@@ -940,7 +943,7 @@ const MOD = {
    ============================================================ */
 const LAYOUTS = {
   wide(B, u, t, o) {
-    const port = B.h > B.w, items = [], sH = u * (port ? 8 : 9.5), gap = u * 1.4;
+    const port = B.h > B.w, items = [], sH = u * (port ? 8 : 9.5) * (o.small ? 1.4 : 1), gap = u * 1.4;
     items.push({ m: 'statusRow', r: { x: B.x, y: B.y, w: B.w, h: sH } });
     const P = { x: B.x, y: B.y + sH + gap, w: B.w, h: B.h - sH - gap };
     items.push({ m: 'panel', r: P, rad: u * 2.2 });
@@ -961,7 +964,7 @@ const LAYOUTS = {
     items.push({ m: 'header', r: { x: B.x + ip, y, w: iw, h: hh }, menu: true });
     y += hh + ip * 0.7;
     if (o.clockPanel) {
-      const rh = port ? u * 11 : u * 12, dw = Math.min(iw, rh * 3.6);   // compact display window, centred
+      const rh = (port ? u * 11 : u * 12) * (o.small ? 1.4 : 1), dw = Math.min(iw, rh * 3.6);   // compact display window, centred
       items.push({ m: 'infoPanel', r: { x: B.x + (B.w - dw) / 2, y, w: dw, h: rh }, pad: u * 1.6, v: 'h', caption: 'TIME',
         box: rgba(t.accent, 0.3), fill: mix(t.panel, t.bg, 0.6), rad: u * 1 });
       y += rh + ip;
@@ -978,7 +981,7 @@ const LAYOUTS = {
   split(B, u, t, o) {
     const port = B.h > B.w, items = [], g = u * 1.4;
     let L = B, Rp = null;
-    if (o.clockPanel && port) { const ih = B.h * 0.18; Rp = { x: B.x, y: B.y, w: B.w, h: ih }; L = { x: B.x, y: B.y + ih + g, w: B.w, h: B.h - ih - g }; }
+    if (o.clockPanel && port) { const ih = B.h * (o.small ? 0.22 : 0.18); Rp = { x: B.x, y: B.y, w: B.w, h: ih }; L = { x: B.x, y: B.y + ih + g, w: B.w, h: B.h - ih - g }; }
     else if (o.clockPanel) { const lw = B.w * 0.65; L = { x: B.x, y: B.y, w: lw, h: B.h }; Rp = { x: B.x + lw + g, y: B.y, w: B.w - lw - g, h: B.h }; }
     items.push({ m: 'panel', r: L, rad: u * 1.2, border: t.panelBorder, bw: 1.5 });
     const ip = u * 2, hh = u * 3.6, ch = u * 4, lh = o.labels ? u * 3 : 0, sm = u * 5;
@@ -1005,7 +1008,7 @@ const LAYOUTS = {
     let y = B.y + ip * 0.7;
     items.push({ m: 'header', r: { x: B.x + ip, y, w: B.w - ip * 2, h: hh }, menu: true });
     y += hh + ip;
-    const bh = o.clockPanel ? (port ? u * 11 : u * 13) : 0, lh = o.labels ? u * 3 : 0;
+    const bh = o.clockPanel ? (port ? u * 11 : u * 13) * (o.small ? 1.4 : 1) : 0, lh = o.labels ? u * 3 : 0;
     const boxY = B.y + B.h - ip * 0.8 - bh;
     const fieldBottom = (bh ? boxY - ip : B.y + B.h - ip) - lh - (lh ? u * 0.6 : 0);
     const field = { x: B.x + ip, y, w: B.w - ip * 2, h: fieldBottom - y };
@@ -1022,7 +1025,7 @@ const LAYOUTS = {
     items.push({ m: 'header', r: { x: B.x, y: B.y, w: B.w, h: hh }, menu: true, glyphs: true, rule: true });
     let y = B.y + hh + u * 2.5;
     if (o.clockPanel) {
-      const ih = port ? u * 12 : u * 14, iw = port ? B.w : B.w * 0.45;
+      const ih = (port ? u * 12 : u * 14) * (o.small ? 1.4 : 1), iw = port ? B.w : B.w * 0.45;
       items.push({ m: 'infoPanel', r: { x: B.x + B.w - iw, y, w: iw, h: ih }, pad: u * 1.6, v: 'stack', box: t.lineWork });
       y += ih + u * 2;
     }
@@ -1037,7 +1040,7 @@ const LAYOUTS = {
 
   // A real component's front panel: engraved model line, recessed display window, controls + clock window
   fascia(B, u, t, o) {
-    const port = B.h > B.w, items = [], topH = u * 6, botH = u * (port ? 11 : 12), side = t.material === 'walnut' ? u * 7 : 0;
+    const port = B.h > B.w, items = [], topH = u * 6, botH = u * (port ? 11 : 12) * (o.small ? 1.3 : 1), side = t.material === 'walnut' ? u * 7 : 0;
     const X = B.x + side, Wd = B.w - side * 2;
     const win = { x: X + u * 1.5, y: B.y + topH, w: Wd - u * 3, h: B.h - topH - botH - u * 1.5, rad: u * 0.8 };
     const rowY = win.y + win.h + u * 2.5, rowH = botH - u * 2.5;
@@ -1069,7 +1072,7 @@ const LAYOUTS = {
     const sh = u * 3.2;
     items.push({ m: 'levelBar', r: { x: B.x + ip, y, w: iw, h: sh } });
     y += sh + ip;
-    const cH = port ? u * 8 : u * 9, lh = o.labels ? u * 3 : 0, cY = B.y + B.h - ip * 0.8 - cH;
+    const cH = (port ? u * 8 : u * 9) * (o.small ? 1.4 : 1), lh = o.labels ? u * 3 : 0, cY = B.y + B.h - ip * 0.8 - cH;
     const field = { x: B.x + ip, y, w: iw, h: cY - ip - lh - (lh ? u * 0.6 : 0) - y };
     items.push({ m: 'analyser', r: field });
     if (lh) items.push({ m: 'freqLabels', r: { x: field.x, y: field.y + field.h + u * 0.6, w: field.w, h: lh }, field });
@@ -1137,12 +1140,17 @@ class Renderer {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
     ctx.fillStyle = t.bg; ctx.fillRect(0, 0, W, H);
-    const s = f.safe || { t: 0, r: 0, b: 0, l: 0 }, u = Math.min(W, H) / 100;
-    f.u = u; f.scale = clamp(u / 8, 0.25, 1.5);
+    // Sizing unit = 1% of the short side, but never so small that text becomes unreadable on a phone.
+    const s = f.safe || { t: 0, r: 0, b: 0, l: 0 }, u0 = Math.min(W, H) / 100, u = this.main ? Math.max(u0, 5.2) : u0;
+    f.u = u; f.scale = clamp(u0 / 8, 0.25, 1.5); f.minFont = this.main ? 9 : 5;
+    f.opts = Object.assign({}, f.opts, { small: this.main && Math.min(W, H) < 600 });
     const pad = Math.max(8 * f.scale, u * 2.2);
     const B = { x: s.l + pad, y: s.t + pad, w: W - s.l - s.r - pad * 2, h: H - s.t - s.b - pad * 2 };
     f.windows = null;
-    for (const it of LAYOUTS[t.layout](B, u, t, f.opts)) MOD[it.m](this, it.r, f, it);
+    if (f.opts.barsOnly) {                                // just the bars, edge to edge
+      ctx.fillStyle = t.panel; ctx.fillRect(0, 0, W, H);
+      MOD.analyser(this, B, f, {});
+    } else for (const it of LAYOUTS[t.layout](B, u, t, f.opts)) MOD[it.m](this, it.r, f, it);
     if (f.opts.scanlines) this.drawCRT(t, f.windows);
     // iOS keeps its status bar (time, battery) over the top of a home-screen app and it can't be hidden
     // or moved. Give it a black bezel strip so it reads as part of the surround, not over the artwork.
@@ -1493,6 +1501,7 @@ function buildSettings() {
     optRow('TILT', 'tilt', onOff, ps.tilt, sn + ' &middot; +3 DB/OCT') +
     optRow('LABELS', 'labels', onOff, S.labels) +
     optRow('CLOCK PANEL', 'clockPanel', onOff, S.clockPanel, 'OR TAP CLOCK IN HEADER') +
+    optRow('BARS ONLY', 'barsOnly', onOff, S.barsOnly, 'OR DOUBLE-TAP THE DISPLAY') +
     optRow('SCANLINES', 'scanlines', onOff, S.scanlines) +
     (FS_OK ? optRow('FULL SCREEN', 'fullscreen', onOff, S.fullscreen, 'HIDES THE STATUS BAR &middot; ON EACH START') +
       `<div class="row"><div class="lbl"></div><div class="opts"><button class="opt${fsEl() ? ' on' : ''}" data-act="fs">${fsEl() ? 'EXIT FULL SCREEN' : 'GO FULL SCREEN NOW'}</button></div></div>` : '') +
@@ -1583,7 +1592,14 @@ cv.addEventListener('pointerup', e => {
   const p = { x: e.clientX, y: e.clientY };
   if (inRect(p, R.hits.menu)) openSettings();
   else if (inRect(p, R.hits.clock)) { S.clockPanel = !S.clockPanel; save(); }
+  else if (inRect(p, R.hits.source)) { /* long-press only */ }
+  else if (lastTap && performance.now() - lastTap.t < 350 && Math.hypot(p.x - lastTap.x, p.y - lastTap.y) < 40) {
+    S.barsOnly = !S.barsOnly; save(); lastTap = null;      // double-tap: bars only <-> full display
+    return;
+  }
+  lastTap = { x: p.x, y: p.y, t: performance.now() };
 });
+let lastTap = null;
 cv.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); cancelLP(); });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeSettings();
@@ -1648,7 +1664,7 @@ function frame(now) {
   R.render({
     now, dt, theme: t, autoOn: ps.auto, music: P.music,
     chans: stereoDisplay() ? [P.chans.L, P.chans.R] : [P.chans.M],
-    segs: S.segments, glow: { off: 0, subtle: 0.25, full: 0.55 }[S.glow], opts: { labels: S.labels, clockPanel: S.clockPanel, scanlines: S.scanlines },
+    segs: S.segments, glow: { off: 0, subtle: 0.25, full: 0.55 }[S.glow], opts: { labels: S.labels, clockPanel: S.clockPanel, scanlines: S.scanlines, barsOnly: S.barsOnly },
     flags: { st: A.live && A.stereo, dsp: ps.tilt || S.source === 'mic', loud: now < P.loudUntil, over: now < P.overUntil, source: S.source },
     clock: clock(), battery: BAT.pct, sr: P.sr, sig: P.sig, level: P.level, safe: SAFE, holdOn: S.peakHold > 0
   });
