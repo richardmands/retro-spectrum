@@ -718,7 +718,7 @@ const MOD = {
     const v = it.v;
     if (v === 'h') {                       // [tile] caption/date ........ CLOCK
       let x = b.x;
-      const ch = Math.min(b.h * 0.66, (b.x + b.w - x) * 0.55 / 2.9);
+      const ch = Math.min(b.h * 0.8, (b.x + b.w - x) * 0.6 / 2.9);
       seg7(ctx, f.clock.hm, b.x + b.w, b.y + (b.h - ch) / 2, ch, t.accent, { align: 'right', glow: gl * ch, ghost: 0.07 });
       const fs = Math.max(6, Math.min(b.h * 0.15, 15));
       text(ctx, cap, x, b.y + b.h * 0.36, fs, t.accent, { sp: 0.32, alpha: 0.9 });
@@ -823,8 +823,8 @@ const LAYOUTS = {
     items.push({ m: 'header', r: { x: B.x + ip, y, w: iw, h: hh }, menu: true });
     y += hh + ip * 0.7;
     if (o.clockPanel) {
-      const rh = port ? u * 11 : u * 12;
-      items.push({ m: 'infoPanel', r: { x: B.x + ip, y, w: iw, h: rh }, pad: u * 2, v: 'h', caption: 'TIME',
+      const rh = port ? u * 11 : u * 12, dw = Math.min(iw, rh * 3.6);   // compact display window, centred
+      items.push({ m: 'infoPanel', r: { x: B.x + (B.w - dw) / 2, y, w: dw, h: rh }, pad: u * 1.6, v: 'h', caption: 'TIME',
         box: rgba(t.accent, 0.3), fill: mix(t.panel, t.bg, 0.6), rad: u * 1 });
       y += rh + ip;
     }
