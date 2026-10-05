@@ -98,6 +98,13 @@ const IN_APP = /[?&]app\b/.test(location.search);       // inside the native iPa
 
 // Each theme is a token set + a layout variant. The renderer knows nothing about individual themes.
 // `segments` is the segment count applied when the theme is picked (user can change it after).
+// Red LED's design in any hue (h = 0–360): bright face, lighter top zone, near-white peak cap, dark unlit blocks
+function ledTheme(id, name, h) {
+  return { id, name, layout: 'wide', colourMode: 'fixed',
+    bg: '#000000', panel: hslHex(h, 60, 3.5), segOff: hslHex(h, 65, 10), segLow: hslHex(h, 100, 55), segHigh: hslHex(h, 100, 68),
+    peak: hslHex(h, 100, 91), accent: hslHex(h, 100, 58), label: hslHex(h, 60, 30), glow: hslHex(h, 100, 55), glowStrength: 22,
+    segGap: 3, barGap: 4, radius: 1, header: 'SPECTRUM ANALYZER', freqs: [40, 100, 1000, 4000, 16000], segments: 16 };
+}
 const THEMES = [
   { id: 'vfd-green', name: 'VFD Green', layout: 'wide', colourMode: 'fixed',
     bg: '#000000', panel: '#0A1510', segOff: '#1B2E24', segLow: '#A8F0C8', segHigh: '#C8F8DC', peak: '#F2FFF7',
@@ -146,6 +153,19 @@ const THEMES = [
     bg: '#000000', panel: '#0D0303', segOff: '#2A0807', segLow: '#FF2A1A', segHigh: '#FF7055', peak: '#FFD6CC',
     accent: '#FF3B2A', label: '#7A2018', glow: '#FF2A1A', glowStrength: 22, segGap: 3, barGap: 4, radius: 1,
     header: 'SPECTRUM ANALYZER', freqs: [40, 100, 1000, 4000, 16000], segments: 16 },
+  // The rest of the LED family: Red LED's exact design in other colours
+  ledTheme('green-led', 'Green LED', 125),
+  ledTheme('orange-led', 'Orange LED', 24),
+  ledTheme('amber-led', 'Amber LED', 42),
+  ledTheme('blue-led', 'Blue LED', 218),
+  ledTheme('cyan-led', 'Cyan LED', 186),
+  ledTheme('purple-led', 'Purple LED', 272),
+  ledTheme('pink-led', 'Pink LED', 325),
+  Object.assign(ledTheme('white-led', 'White LED', 210), {
+    panel: '#07080A', segOff: '#1A1D22', segLow: '#DDE6F0', segHigh: '#FFFFFF', peak: '#9FD3FF',
+    accent: '#E6EEF7', label: '#5A6470', glow: '#DDE6F0' }),
+  Object.assign(ledTheme('sunset-led', 'Sunset LED', 14), {
+    colourMode: 'gradient', segLow: '#FF2A1A', segHigh: '#FFD21A', peak: '#FFF4D6', accent: '#FF7A1A', glow: '#FF7A1A' }),
   // Physical faceplates: the display sits behind glass in a real component's front panel
   { id: 'silver-receiver', name: 'Silver Receiver', layout: 'fascia', material: 'aluminium', face: '#BDBDBA', colourMode: 'fixed',
     bg: '#9C9C9A', panel: '#03141A', segOff: '#0C2A33', segLow: '#5FE3FF', segHigh: '#B5F3FF', peak: '#EFFFFF',
@@ -1544,9 +1564,7 @@ $('settings').addEventListener('click', e => {
   if (b.dataset.act === 'relearn') { relearn(); buildSettings(); return; }
   if (b.dataset.act === 'fs') { toggleFullscreen(); return; }
   if (b.dataset.theme) {
-    S.theme = b.dataset.theme;
-    const t = theme();
-    if (t.segments !== undefined) S.segments = t.segments ? 16 : 0;
+    S.theme = b.dataset.theme;               // bar style and every other setting carry over between themes
     save(); applyTheme(); buildSettings();
     return;
   }
