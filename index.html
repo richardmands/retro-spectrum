@@ -1,0 +1,1414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Spectrum">
+<meta name="theme-color" content="#000000" id="themeColor">
+<link rel="apple-touch-icon" id="touchIcon" href="data:,">
+<title>Retro Spectrum</title>
+<style>
+:root{--bg:#000;--panel:#0A1510;--accent:#8CFFC0;--label:#3A5F4C;--segoff:#1B2E24;--line:rgba(140,255,192,.2);--glow:rgba(140,255,192,.55);--bri:1;
+  --mono:"SF Mono",ui-monospace,Menlo,"Cascadia Mono",Consolas,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);overflow:hidden;overscroll-behavior:none;-webkit-user-select:none;user-select:none;
+  -webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;font-family:var(--mono);-webkit-text-size-adjust:100%}
+#app{position:fixed;inset:0;filter:brightness(var(--bri))}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.layer{position:absolute;inset:0;transition:opacity .45s ease}
+.hidden{opacity:0;pointer-events:none}
+
+#overlay{display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--accent);text-align:center;
+  padding:24px;cursor:pointer;touch-action:none}
+.ov-title{font-size:clamp(24px,5.5vw,60px);font-weight:600;letter-spacing:.32em;padding-left:.32em;
+  text-shadow:0 0 14px var(--glow),0 0 42px var(--glow);animation:pulse 2.6s ease-in-out infinite}
+.ov-title.err{animation:none;color:var(--accent)}
+@keyframes pulse{0%,100%{opacity:.55}50%{opacity:1}}
+.ov-sub{margin-top:18px;font-size:12px;letter-spacing:.42em;padding-left:.42em;color:var(--label);line-height:2}
+.ov-lamps{display:flex;gap:5px;justify-content:center;align-items:flex-end;margin-bottom:38px}
+.ov-lamps i{display:flex;flex-direction:column-reverse;gap:3px}
+.ov-lamps b{display:block;width:7px;height:12px;border-radius:4px;background:var(--segoff)}
+.ov-lamps b.on{background:var(--accent);box-shadow:0 0 9px var(--glow)}
+.ov-btns{margin-top:30px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.ovb{font:600 13px var(--mono);letter-spacing:.3em;padding:15px 24px 15px calc(24px + .3em);border-radius:999px;cursor:pointer;
+  color:var(--accent);background:transparent;border:1px solid var(--accent);box-shadow:0 0 14px var(--line),inset 0 0 10px var(--line)}
+
+#settings{display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.62);
+  padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+.sheet{width:min(800px,100%);max-height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;
+  background:var(--panel);color:var(--accent);border:1px solid var(--line);border-radius:18px;padding:16px 22px 22px;
+  box-shadow:0 0 50px var(--line)}
+.sh-head{display:flex;justify-content:space-between;align-items:center;padding-bottom:10px}
+.sh-title{font-size:13px;letter-spacing:.42em;text-shadow:0 0 10px var(--glow)}
+.x{font:600 18px var(--mono);color:var(--accent);background:transparent;border:1px solid var(--line);border-radius:999px;width:38px;height:38px;cursor:pointer}
+.row{display:grid;grid-template-columns:150px 1fr;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.row.full{grid-template-columns:1fr}
+.lbl{font-size:11px;letter-spacing:.26em;color:var(--label)}
+.lbl small{display:block;margin-top:4px;font-size:9px;letter-spacing:.18em;opacity:.85}
+.opts{display:flex;flex-wrap:wrap;gap:6px}
+.opt{font:600 11px var(--mono);letter-spacing:.16em;color:var(--label);background:transparent;border:1px solid var(--line);
+  border-radius:999px;padding:9px 13px;cursor:pointer}
+.opt.on{color:var(--accent);border-color:var(--accent);box-shadow:0 0 12px var(--line),inset 0 0 8px var(--line);text-shadow:0 0 8px var(--glow)}
+.opt:disabled{opacity:.28;cursor:default}
+.themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.card{padding:0;border:2px solid transparent;border-radius:12px;overflow:hidden;cursor:pointer;text-align:left;display:block;width:100%}
+.card canvas{display:block;width:100%;height:auto;aspect-ratio:16/10}
+.card span{display:block;font:600 10px var(--mono);letter-spacing:.2em;padding:8px 10px}
+.slider{display:flex;align-items:center;gap:14px}
+.slider input{flex:1;accent-color:var(--accent);min-width:0}
+.val{font-size:12px;min-width:86px;text-align:right;letter-spacing:.08em}
+select{font:600 12px var(--mono);background:transparent;color:var(--accent);border:1px solid var(--line);border-radius:10px;padding:10px;width:100%}
+option{background:#111;color:#eee}
+.note{font-size:10px;letter-spacing:.14em;color:var(--label);line-height:1.8;padding-top:14px;border-top:1px solid var(--line)}
+.note b{color:var(--accent);font-weight:600}
+@media (max-width:560px){.row{grid-template-columns:1fr;gap:8px}.themes{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="cv"></canvas>
+  <div id="overlay" class="layer">
+    <div>
+      <div class="ov-lamps" id="ovLamps"></div>
+      <div class="ov-title" id="ovTitle">TAP TO START</div>
+      <div class="ov-sub" id="ovSub">LINE IN</div>
+      <div class="ov-btns" id="ovBtns"></div>
+    </div>
+  </div>
+  <div id="settings" class="layer hidden"><div class="sheet" id="sheet"></div></div>
+</div>
+<div id="safe" style="position:fixed;inset:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)"></div>
+<script>
+'use strict';
+/* ============================================================
+   Constants, themes, helpers, settings
+   ============================================================ */
+const MONO = '"SF Mono", ui-monospace, Menlo, "Cascadia Mono", Consolas, monospace';
+const F_LO = 30, F_HI = 16000, FFT = 4096;
+const BAND_OPTS = [12, 16, 20, 24, 31];
+const SEG_OPTS = [8, 12, 16, 24, 0];          // 0 = continuous
+const HOLD_OPTS = [0, 500, 900, 1500, 3000];
+const DECAY_DB = { slow: 7, medium: 14, fast: 28 };   // dB per second
+const OVER_RED = '#FF3B30';
+const DEMO = /[?&]demo\b/.test(location.search);
+
+// Each theme is a token set + a layout variant. The renderer knows nothing about individual themes.
+// `segments` is the segment count applied when the theme is picked (user can change it after).
+const THEMES = [
+  { id: 'vfd-green', name: 'VFD Green', layout: 'wide', colourMode: 'fixed',
+    bg: '#000000', panel: '#0A1510', segOff: '#1B2E24', segLow: '#A8F0C8', segHigh: '#C8F8DC', peak: '#F2FFF7',
+    accent: '#8CFFC0', label: '#3A5F4C', glow: '#A8F0C8', glowStrength: 22, segGap: 4, barGap: 5, radius: 999,
+    scanlines: true, scanlineOpacity: 0.04, header: 'SPECTRUM ANALYZER',
+    freqs: [40, 100, 1000, 4000, 16000], segments: 16 },
+  { id: 'plasma-orange', name: 'Plasma Orange', layout: 'deck', colourMode: 'gradient',
+    bg: '#0A0502', panel: '#140A04', segOff: '#2A1608', segLow: '#E2560E', segHigh: '#FFC24D', peak: '#FFEFC9',
+    accent: '#FF8A2B', label: '#8A5220', glow: '#FF7A18', glowStrength: 18, segGap: 2, barGap: 5, radius: 4,
+    header: 'STEREO GRAPHIC EQUALIZER', headerRight: 'CD TEXT', footer: 'SPECTRUM ANALYZER',
+    freqs: [60, 120, 250, 380, 500, 750, 1000, 2000, 4000, 8000, 16000], segments: 24 },
+  { id: 'jdm-night', name: 'JDM Night', layout: 'split', colourMode: 'level',
+    bg: '#050301', panel: '#0C0703', segOff: '#1C1409', levelLow: '#3BE85C', levelMid: '#E8D23B', levelHigh: '#FF3B2F',
+    segLow: '#3BE85C', segHigh: '#FF3B2F', peak: '#FFFFFF', accent: '#FF8C1A', label: '#8A5A22', panelBorder: '#3A2410',
+    glow: '#FF8C1A', glowStrength: 10, segGap: 2, barGap: 4, radius: 1, header: 'SPECTRUM ANALYZER',
+    freqs: [40, 100, 250, 1000, 4000, 16000], segments: 16 },
+  { id: 'bubble-grid', name: 'Bubble Grid', layout: 'synth', colourMode: 'gradient',
+    bg: '#05060F', panel: '#080A1A', segOff: '#141A33', segOffAlpha: 0.72, segLow: '#1E7BFF', segHigh: '#58D8FF', peak: '#FF4FA3',
+    accent: '#FF4FA3', label: '#4A6BA8', gridColour: '#8A2BE2', gridHorizon: '#FF4FA3',
+    glow: '#58D8FF', glowStrength: 16, segGap: 3, barGap: 4, radius: 2,
+    header: 'GRAPHIC EQUALIZER', headerColour: '#58D8FF', headerRight: 'SPECTRUM ANALYZER',
+    freqs: [40, 100, 250, 1000, 4000, 16000], segments: 16 },
+  { id: 'wireframe-lcd', name: 'Wireframe LCD', layout: 'instrument', colourMode: 'fixed',
+    bg: '#EDEFF2', panel: '#E3E7ED', segOff: '#CDD4DE', segLow: '#1E3A6B', segHigh: '#1E3A6B', peak: '#0A1428',
+    accent: '#4A6FA5', label: '#6B7A90', lineWork: '#A8B4C6', radarCentre: '#2A3A6B',
+    glow: '#000000', glowStrength: 0, segGap: 2, barGap: 3, radius: 0, inverted: true,
+    header: 'FFT {SR}  VER 3.2', freqs: [50, 100, 200, 500, 1000, 2000, 5000, 10000], segments: 12 },
+  { id: 'nixie-amber', name: 'Nixie Amber', layout: 'wide', colourMode: 'fixed',
+    bg: '#0B0603', panel: '#120A04', segOff: '#2B1A08', segLow: '#FFAE42', segHigh: '#FFD892', peak: '#FFF6E0',
+    accent: '#FFAE42', label: '#7A4A14', glow: '#FFAE42', glowStrength: 26, segGap: 2, barGap: 4, radius: 3,
+    header: 'SPECTRUM ANALYZER', freqs: [40, 100, 1000, 4000, 16000], segments: 12 },
+  { id: 'scope-green', name: 'Scope Green', layout: 'wide', colourMode: 'fixed',
+    bg: '#000000', panel: '#020A04', segOff: '#06230D', segLow: '#33FF66', segHigh: '#33FF66', peak: '#CCFFDD',
+    accent: '#33FF66', label: '#1A7A33', glow: '#33FF66', glowStrength: 20, segGap: 1, barGap: 2, radius: 0,
+    scanlines: true, scanlineOpacity: 0.05, persistence: 0.25, header: 'SPECTRUM ANALYZER',
+    freqs: [40, 100, 250, 1000, 4000, 16000], segments: 0 },
+  { id: 'gaming-rgb', name: 'Gaming RGB', layout: 'wide', colourMode: 'band',
+    bg: '#000000', panel: '#000000', segOff: '#0D0D12', segLow: '#FF2D95', segHigh: '#FF2D95', peak: '#FFFFFF',
+    accent: '#B26BFF', label: '#444450', glow: '#B26BFF', glowStrength: 22, segGap: 2, barGap: 3, radius: 2,
+    hueCycle: 12000, hueStep: 6, header: 'SPECTRUM ANALYZER',
+    freqs: [40, 100, 1000, 4000, 16000], segments: 16 }
+];
+
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+const _rgb = new Map();
+function rgb(hex) {
+  let c = _rgb.get(hex);
+  if (c) return c;
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h.split('').map(x => x + x).join('');
+  const n = parseInt(h, 16);
+  c = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  if (_rgb.size > 3000) _rgb.clear();
+  _rgb.set(hex, c);
+  return c;
+}
+function rgba(hex, a) { const [r, g, b] = rgb(hex); return `rgba(${r},${g},${b},${a})`; }
+function mix(h1, h2, t) {
+  const a = rgb(h1), b = rgb(h2);
+  return '#' + [0, 1, 2].map(i => Math.round(a[i] + (b[i] - a[i]) * t).toString(16).padStart(2, '0')).join('');
+}
+function hslHex(h, s, l) {
+  s /= 100; l /= 100;
+  const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return '#' + [f(0), f(8), f(4)].map(x => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
+}
+// Theme tokens that change over time (Gaming RGB hue cycle)
+function resolveTheme(t, now) {
+  if (!t.hueCycle) return t;
+  const hue = (now / t.hueCycle * 360) % 360, c = hslHex(hue, 100, 55);
+  return Object.assign({}, t, { accent: c, glow: c, headerColour: c, hue });
+}
+
+/* ---------- Settings (localStorage, every access guarded) ---------- */
+const STORE_KEY = 'retroSpectrum.v1';
+const DEFAULTS = {
+  source: 'line', theme: 'vfd-green', bands: 24, segments: 16, channels: 'mono', peakHold: 900, decay: 'medium',
+  labels: true, clockPanel: true, brightness: 100,
+  devices: { line: '', mic: '' },
+  perSource: { line: { floor: -72, ceil: -6, tilt: true }, mic: { floor: -95, ceil: -35, tilt: true } }
+};
+function loadSettings() {
+  const s = JSON.parse(JSON.stringify(DEFAULTS));
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    const o = raw ? JSON.parse(raw) : null;
+    if (o && typeof o === 'object') {
+      for (const k of Object.keys(DEFAULTS)) {
+        if (o[k] === undefined) continue;
+        if (k === 'devices') Object.assign(s.devices, o.devices);
+        else if (k === 'perSource') { for (const sk of ['line', 'mic']) if (o.perSource[sk]) Object.assign(s.perSource[sk], o.perSource[sk]); }
+        else s[k] = o[k];
+      }
+    }
+  } catch (e) { /* storage unavailable: defaults */ }
+  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+  if (!BAND_OPTS.includes(s.bands)) s.bands = DEFAULTS.bands;
+  if (!SEG_OPTS.includes(s.segments)) s.segments = DEFAULTS.segments;
+  if (!HOLD_OPTS.includes(s.peakHold)) s.peakHold = DEFAULTS.peakHold;
+  if (!DECAY_DB[s.decay]) s.decay = DEFAULTS.decay;
+  if (s.source !== 'line' && s.source !== 'mic') s.source = 'line';
+  if (s.channels !== 'mono' && s.channels !== 'stereo') s.channels = 'mono';
+  s.brightness = clamp(+s.brightness || 100, 20, 100);
+  return s;
+}
+const S = loadSettings();
+function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) { } }
+const theme = () => THEMES.find(t => t.id === S.theme) || THEMES[0];
+const srcName = s => (s || S.source) === 'line' ? 'LINE IN' : 'MICROPHONE';
+
+/* ============================================================
+   Audio capture
+   ============================================================ */
+// iOS voice processing must be off for both sources (AGC pumps, NS gates sustained tones).
+const PROC = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+const INTERNAL_RE = /built-?in|internal|ipad|iphone|macbook|imac|integrated|realtek|webcam|facetime|camera|array/i;
+const A = { ctx: null, stream: null, track: null, nodes: [], demo: null, aL: null, aR: null, aM: null,
+  stereo: false, live: false, deviceId: '', deviceLabel: '', devices: [] };
+const App = { running: false, busy: false, overlay: 'start' };
+const UI = { open: false };
+
+class InputError extends Error { constructor(code) { super(code); this.code = code; } }
+const isDenied = e => e && /NotAllowed|Security|PermissionDenied/.test(e.name || '');
+const isExternal = d => d.deviceId !== 'default' && d.deviceId !== 'communications' && !!d.label && !INTERNAL_RE.test(d.label);
+
+async function listInputs() {
+  try { return (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput'); }
+  catch (e) { return []; }
+}
+
+// Must be called synchronously inside a user gesture the first time (iOS).
+function ensureCtx() {
+  if (!A.ctx) {
+    const C = window.AudioContext || window.webkitAudioContext;
+    A.ctx = new C();
+    A.ctx.onstatechange = () => {
+      if (A.ctx.state !== 'running' && App.running) { App.running = false; showStart(); }
+    };
+  }
+  if (A.ctx.state !== 'running') A.ctx.resume().catch(() => { });
+  return A.ctx;
+}
+
+function teardown() {
+  for (const n of A.nodes) { try { n.disconnect(); } catch (e) { } }
+  A.nodes = [];
+  if (A.demo) { for (const o of A.demo) { try { o.stop(); } catch (e) { } } A.demo = null; }
+  if (A.stream) for (const t of A.stream.getTracks()) { t.onended = null; t.stop(); }
+  A.stream = A.track = null;
+  A.aL = A.aR = A.aM = null;
+  A.live = false;
+}
+
+function makeAnalyser() {
+  const a = A.ctx.createAnalyser();
+  a.fftSize = FFT;
+  a.smoothingTimeConstant = 0.6;   // low: attack stays snappy, decay is done in the draw loop
+  a.minDecibels = -140; a.maxDecibels = 0;
+  return a;
+}
+
+// node -> [mic: 80 Hz high-pass] -> splitter -> L/R analysers, plus a mono (down-mixed) analyser.
+// Deliberately NOT connected to ctx.destination: the iPad must never play the signal back.
+function wireGraph(node, source, stereo) {
+  let n = node;
+  if (source === 'mic') {
+    const hp = A.ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 80; hp.Q.value = 0.707;
+    n.connect(hp); n = hp; A.nodes.push(hp);
+  }
+  const sp = A.ctx.createChannelSplitter(2);
+  n.connect(sp);
+  A.aL = makeAnalyser(); A.aR = makeAnalyser(); A.aM = makeAnalyser();
+  sp.connect(A.aL, 0); sp.connect(A.aR, 1); n.connect(A.aM);
+  A.nodes.push(node, sp, A.aL, A.aR, A.aM);
+  A.stereo = stereo;
+  A.live = true;
+  setupBands();
+}
+
+async function openSource(source) {
+  teardown();
+  if (DEMO) { buildDemo(source); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new InputError('INSECURE');
+  let devs = await listInputs();
+  if (!devs.some(d => d.label)) {
+    // Labels are hidden until permission is granted: ask once, then look again.
+    try { const s = await navigator.mediaDevices.getUserMedia({ audio: { ...PROC }, video: false }); s.getTracks().forEach(t => t.stop()); }
+    catch (e) { throw new InputError(isDenied(e) ? 'DENIED' : source === 'line' ? 'NO_LINE' : 'NO_MIC'); }
+    devs = await listInputs();
+  }
+  A.devices = devs;
+  const want = S.devices[source];
+  let dev = want ? devs.find(d => d.deviceId === want) : null;
+  if (source === 'line') {
+    dev = dev || devs.find(isExternal);
+    if (!dev) throw new InputError('NO_LINE');      // never fall back to the mic silently
+  } else {
+    dev = dev || devs.find(d => !isExternal(d) && d.deviceId !== 'communications') || devs[0];
+  }
+  const cons = { ...PROC, channelCount: { ideal: source === 'line' ? 2 : 1 }, sampleRate: { ideal: 48000 } };
+  if (dev) cons.deviceId = { exact: dev.deviceId };
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: cons, video: false }); }
+  catch (e) { throw new InputError(isDenied(e) ? 'DENIED' : source === 'line' ? 'NO_LINE' : 'NO_MIC'); }
+  A.stream = stream;
+  A.track = stream.getAudioTracks()[0];
+  A.deviceId = dev ? dev.deviceId : '';
+  A.deviceLabel = (A.track && A.track.label) || (dev && dev.label) || '';
+  A.track.onended = onInputLost;
+  const set = A.track.getSettings ? A.track.getSettings() : {};
+  const stereo = source === 'line' && (set.channelCount ? set.channelCount >= 2 : true);
+  ensureCtx();
+  wireGraph(A.ctx.createMediaStreamSource(stream), source, stereo);
+}
+
+// ?demo in the URL: synthetic test signal instead of an input (for checking the visuals only).
+function buildDemo(source) {
+  const ctx = A.ctx, oscs = [];
+  const osc = (type, f) => { const o = ctx.createOscillator(); o.type = type; o.frequency.value = f; o.start(); oscs.push(o); return o; };
+  const gain = v => { const g = ctx.createGain(); g.gain.value = v; A.nodes.push(g); return g; };
+  const filt = (type, f) => { const b = ctx.createBiquadFilter(); b.type = type; b.frequency.value = f; A.nodes.push(b); return b; };
+  const bass = gain(0.2), bassLfo = gain(0.18), lp = filt('lowpass', 400);
+  osc('sawtooth', 55).connect(bass); osc('square', 2).connect(bassLfo); bassLfo.connect(bass.gain); bass.connect(lp);
+  const chord = gain(0.06), clp = filt('lowpass', 2000), clfo = gain(1800);
+  [220, 277.2, 329.6, 440].forEach(f => osc('sawtooth', f).connect(chord));
+  osc('sine', 0.15).connect(clfo); clfo.connect(clp.frequency); chord.connect(clp);
+  const buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const noise = ctx.createBufferSource(); noise.buffer = buf; noise.loop = true; noise.start(); oscs.push(noise);
+  const hp = filt('highpass', 6000), hats = gain(0.12), hatLfo = gain(0.12);
+  noise.connect(hp); hp.connect(hats); osc('square', 4).connect(hatLfo); hatLfo.connect(hats.gain);
+  const L = gain(1), R = gain(1), cR = gain(0.7), hL = gain(0.5), out = ctx.createChannelMerger(2);
+  lp.connect(L); lp.connect(R); clp.connect(L); clp.connect(cR); cR.connect(R); hats.connect(hL); hL.connect(L); hats.connect(R);
+  L.connect(out, 0, 0); R.connect(out, 0, 1);
+  A.demo = oscs; A.deviceLabel = 'DEMO SIGNAL';
+  wireGraph(out, source, source === 'line');
+}
+
+function onInputLost() {
+  if (DEMO || !App.running) return;
+  teardown();
+  showError(S.source === 'line' ? 'NO_LINE' : 'NO_MIC');
+}
+if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+  navigator.mediaDevices.addEventListener('devicechange', async () => {
+    const devs = await listInputs();
+    if (devs.length) A.devices = devs;
+    // iOS may silently re-route to the built-in mic when the interface is unplugged: treat as lost.
+    if (A.live && A.deviceId && !devs.some(d => d.deviceId === A.deviceId)) onInputLost();
+    if (UI.open) buildSettings();
+  });
+}
+
+/* ---------- Wake lock ---------- */
+const WAKE_OK = 'wakeLock' in navigator;
+let wakeLock = null;
+async function requestWake() {
+  if (!WAKE_OK || document.visibilityState !== 'visible') return;
+  try { if (!wakeLock || wakeLock.released) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) { }
+}
+
+/* ---------- Battery (omitted silently where unsupported, e.g. Safari) ---------- */
+const BAT = { pct: null };
+if (navigator.getBattery) navigator.getBattery().then(b => {
+  const u = () => BAT.pct = Math.round(b.level * 100);
+  u(); b.addEventListener('levelchange', u);
+}).catch(() => { });
+
+/* ============================================================
+   Signal processing: log bands, ballistics, peak hold, flags
+   ============================================================ */
+const P = { n: 0, lo: null, hi: null, tilt: null, chans: null, fbuf: new Float32Array(FFT / 2), tbuf: new Float32Array(FFT),
+  sr: 48000, loudUntil: 0, overUntil: 0, fade: 1, fadeTarget: 1, sig: 0, discAngle: 0, bandCap: 99, slowSince: 0, ema: 16 };
+
+function effBands() {
+  let n = S.bands;
+  while (n > P.bandCap && BAND_OPTS.indexOf(n) > 0) n = BAND_OPTS[BAND_OPTS.indexOf(n) - 1];
+  return n;
+}
+const newChan = n => ({ db: new Float32Array(n).fill(-200), v: new Float32Array(n), p: new Float32Array(n),
+  hold: new Float64Array(n), vel: new Float32Array(n) });
+
+function setupBands() {
+  const n = effBands(), sr = A.ctx ? A.ctx.sampleRate : 48000, binHz = sr / FFT, maxBin = FFT / 2 - 1, ratio = F_HI / F_LO;
+  P.n = n; P.sr = sr;
+  P.lo = new Uint16Array(n); P.hi = new Uint16Array(n); P.tilt = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const f0 = F_LO * Math.pow(ratio, i / n), f1 = F_LO * Math.pow(ratio, (i + 1) / n);
+    const a = clamp(Math.round(f0 / binHz), 1, maxBin);
+    P.lo[i] = a;
+    P.hi[i] = clamp(Math.round(f1 / binHz) - 1, a, maxBin);   // low bands may hold a single bin
+    const fc = Math.sqrt(f0 * f1);
+    P.tilt[i] = fc > 1000 ? 3 * Math.log2(fc / 1000) : 0;    // +3 dB/octave above 1 kHz
+  }
+  P.chans = { L: newChan(n), R: newChan(n), M: newChan(n) };
+}
+
+const stereoDisplay = () => S.channels === 'stereo' && S.source === 'line' && A.stereo;
+
+function process(now, dt) {
+  const ps = S.perSource[S.source];
+  const floor = ps.floor, span = Math.max(ps.ceil, ps.floor + 6) - floor;
+  const decay = DECAY_DB[S.decay] * dt, holdMs = S.peakHold;
+  const fall0 = (1 / (S.segments || 16)) / 0.12;        // ~1 segment per 120 ms, then accelerating
+  P.fade += clamp(P.fadeTarget - P.fade, -dt / 0.15, dt / 0.15);
+  let sig = 0;
+  for (const k of stereoDisplay() ? ['L', 'R'] : ['M']) {
+    const ch = P.chans[k];
+    const an = App.running && A.live ? (k === 'L' ? A.aL : k === 'R' ? A.aR : A.aM) : null;
+    if (an) an.getFloatFrequencyData(P.fbuf);
+    for (let i = 0; i < P.n; i++) {
+      let m = -200;
+      if (an) {
+        for (let b = P.lo[i]; b <= P.hi[i]; b++) { const x = P.fbuf[b]; if (x > m) m = x; }   // max, not mean
+        if (ps.tilt) m += P.tilt[i];
+      }
+      // instant attack, linear-in-dB (exponential) decay
+      ch.db[i] = m > ch.db[i] ? m : Math.max(m, ch.db[i] - decay);
+      const v = clamp((ch.db[i] - floor) / span, 0, 1) * P.fade;
+      ch.v[i] = v;
+      if (v > sig) sig = v;
+      if (holdMs <= 0) { ch.p[i] = 0; continue; }
+      if (v >= ch.p[i]) { ch.p[i] = v; ch.hold[i] = now + holdMs; ch.vel[i] = fall0; }
+      else if (now > ch.hold[i]) { ch.p[i] = Math.max(v, ch.p[i] - ch.vel[i] * dt); ch.vel[i] += fall0 * 4 * dt; }
+    }
+    if (an) {
+      // LOUD / OVER from the waveform: a true sample peak is a real clipping indicator.
+      an.getFloatTimeDomainData(P.tbuf);
+      let pk = 0;
+      for (let j = 0; j < P.tbuf.length; j++) { const a = Math.abs(P.tbuf[j]); if (a > pk) pk = a; }
+      if (pk >= 0.98) P.overUntil = now + 1000;
+      if (pk >= 0.1) P.loudUntil = now + 2000;           // -20 dBFS
+    }
+  }
+  P.sig = sig;
+  if (sig > 0.06) P.discAngle += dt * Math.PI * 0.9;
+}
+
+/* ============================================================
+   Drawing helpers
+   ============================================================ */
+function rr(ctx, x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, w / 2, h / 2));
+  if (r < 0.5) { ctx.rect(x, y, w, h); return; }
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// Letter-spaced small-caps text (canvas letterSpacing is not reliable on older Safari)
+const _tw = new Map();
+function tw(ctx, ch) {
+  const k = ctx.font + '|' + ch;
+  let w = _tw.get(k);
+  if (w === undefined) { w = ctx.measureText(ch).width; if (_tw.size > 5000) _tw.clear(); _tw.set(k, w); }
+  return w;
+}
+function textW(ctx, str, size, sp = 0.18, weight = 600) {
+  ctx.font = `${weight} ${size}px ${MONO}`;
+  let w = 0;
+  for (const c of str) w += tw(ctx, c);
+  return w + size * sp * Math.max(0, str.length - 1);
+}
+function text(ctx, str, x, y, size, colour, o = {}) {
+  const sp = o.sp ?? 0.18, weight = o.weight ?? 600, align = o.align || 'left';
+  const w = textW(ctx, str, size, sp, weight);
+  let cx = align === 'left' ? x : align === 'right' ? x - w : x - w / 2;
+  ctx.save();
+  ctx.fillStyle = colour; ctx.textBaseline = o.base || 'middle'; ctx.textAlign = 'left';
+  if (o.alpha != null) ctx.globalAlpha = o.alpha;
+  if (o.glow) { ctx.shadowColor = o.glowColour || colour; ctx.shadowBlur = o.glow; }
+  const gap = size * sp;
+  for (const c of str) { ctx.fillText(c, cx, y); cx += tw(ctx, c) + gap; }
+  ctx.restore();
+  return w;
+}
+
+// Seven-segment digits with faint unlit "ghost" segments, slightly italic like real displays
+const SEG7 = { '0': 'abcdef', '1': 'bc', '2': 'abged', '3': 'abgcd', '4': 'fgbc', '5': 'afgcd', '6': 'afgedc', '7': 'abc', '8': 'abcdefg', '9': 'abcdfg', '-': 'g', ' ': '' };
+function seg7W(str, h) { let t = 0; for (const c of str) t += c === ':' ? h * 0.22 : h * 0.5; return t + h * 0.16 * (str.length - 1); }
+function seg7(ctx, str, x, y, h, colour, o = {}) {
+  const w = h * 0.5, g = h * 0.16, cw = h * 0.22, t = h * 0.11, e = t * 0.18, total = seg7W(str, h);
+  let cx = o.align === 'right' ? x - total : o.align === 'center' ? x - total / 2 : x;
+  const on = new Path2D(), off = new Path2D();
+  const hs = (p, x1, x2, yy) => { p.moveTo(x1, yy); p.lineTo(x1 + t / 2, yy - t / 2); p.lineTo(x2 - t / 2, yy - t / 2); p.lineTo(x2, yy); p.lineTo(x2 - t / 2, yy + t / 2); p.lineTo(x1 + t / 2, yy + t / 2); p.closePath(); };
+  const vs = (p, xx, y1, y2) => { p.moveTo(xx, y1); p.lineTo(xx + t / 2, y1 + t / 2); p.lineTo(xx + t / 2, y2 - t / 2); p.lineTo(xx, y2); p.lineTo(xx - t / 2, y2 - t / 2); p.lineTo(xx - t / 2, y1 + t / 2); p.closePath(); };
+  for (const c of str) {
+    if (c === ':') {
+      const d = t * 1.1;
+      on.rect(cx + cw / 2 - d / 2, y + h * 0.3 - d / 2, d, d); on.rect(cx + cw / 2 - d / 2, y + h * 0.7 - d / 2, d, d);
+      cx += cw + g; continue;
+    }
+    const lit = SEG7[c] || '', L = cx + t / 2, R = cx + w - t / 2, T = y + t / 2, M = y + h / 2, B = y + h - t / 2;
+    const segs = { a: p => hs(p, L + e, R - e, T), g: p => hs(p, L + e, R - e, M), d: p => hs(p, L + e, R - e, B),
+      f: p => vs(p, L, T + e, M - e), b: p => vs(p, R, T + e, M - e), e: p => vs(p, L, M + e, B - e), c: p => vs(p, R, M + e, B - e) };
+    for (const k in segs) segs[k](lit.includes(k) ? on : off);
+    cx += w + g;
+  }
+  ctx.save();
+  const sk = 0.07;
+  ctx.transform(1, 0, -sk, 1, sk * (y + h), 0);
+  ctx.fillStyle = colour;
+  if (o.ghost !== 0) { ctx.globalAlpha = o.ghost ?? 0.08; ctx.fill(off); ctx.globalAlpha = 1; }
+  if (o.glow) { ctx.shadowColor = colour; ctx.shadowBlur = o.glow; ctx.fill(on); ctx.shadowBlur = o.glow * 0.35; }
+  ctx.fill(on);
+  ctx.restore();
+  return total;
+}
+
+function drawNote(ctx, cx, cy, s, col, glow) {
+  ctx.save();
+  ctx.fillStyle = col;
+  if (glow) { ctx.shadowColor = col; ctx.shadowBlur = glow; }
+  const hr = s * 0.15, h1 = { x: cx - s * 0.28, y: cy + s * 0.32 }, h2 = { x: cx + s * 0.3, y: cy + s * 0.22 };
+  for (const h of [h1, h2]) { ctx.beginPath(); ctx.ellipse(h.x, h.y, hr * 1.25, hr, -0.4, 0, Math.PI * 2); ctx.fill(); }
+  const sw = s * 0.07, s1 = h1.x + hr * 1.1, s2 = h2.x + hr * 1.1, t1 = cy - s * 0.42, t2 = cy - s * 0.52;
+  ctx.fillRect(s1 - sw, t1, sw, h1.y - t1); ctx.fillRect(s2 - sw, t2, sw, h2.y - t2);
+  ctx.beginPath(); ctx.moveTo(s1 - sw, t1); ctx.lineTo(s2, t2); ctx.lineTo(s2, t2 + s * 0.14); ctx.lineTo(s1 - sw, t1 + s * 0.14); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+function drawMenu(R, ctx, cx, cy, r, t) {
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = mix(t.bg, t.accent, t.inverted ? 0.12 : 0.09); ctx.fill();
+  ctx.strokeStyle = rgba(t.accent, 0.35); ctx.lineWidth = 1; ctx.stroke();
+  ctx.strokeStyle = t.accent; ctx.lineWidth = Math.max(1.2, r * 0.1); ctx.lineCap = 'round';
+  const l = r * 0.42;
+  for (const dy of [-r * 0.28, 0, r * 0.28]) { ctx.beginPath(); ctx.moveTo(cx - l, cy + dy); ctx.lineTo(cx + l, cy + dy); ctx.stroke(); }
+  ctx.restore();
+  if (R.main) R.hits.menu = { x: cx - r * 1.5, y: cy - r * 1.5, w: r * 3, h: r * 3 };
+}
+
+// Mode flags (lit / ~25% unlit) followed by the LINE / MIC source indicator. Right-aligned at xr.
+function drawFlags(R, ctx, xr, cy, size, f, t) {
+  const fl = f.flags, sp = 0.16, gap = size * 1.3;
+  xr -= size * 0.8;
+  const items = [['ST', fl.st], ['DSP', fl.dsp], ['LOUD', fl.loud], ['OVER', fl.over, OVER_RED], null,
+    ['LINE', fl.source === 'line'], ['MIC', fl.source === 'mic']];
+  const ws = items.map(it => it ? textW(ctx, it[0], size, sp) : gap * 0.4);
+  const total = ws.reduce((a, b) => a + b, 0) + gap * (items.length - 1);
+  let x = xr - total, srcX0 = 0;
+  items.forEach((it, i) => {
+    if (it) {
+      if (it[0] === 'LINE') srcX0 = x;
+      const col = it[1] && it[2] ? it[2] : t.accent;
+      text(ctx, it[0], x, cy, size, col, { sp, alpha: it[1] ? 1 : 0.25, glow: it[1] && !t.inverted ? size * 0.9 : 0 });
+    }
+    x += ws[i] + gap;
+  });
+  const sx = srcX0 - size * 0.7, sw = xr - srcX0 + size * 1.4, sh = size * 2.1;
+  ctx.save(); ctx.beginPath(); rr(ctx, sx, cy - sh / 2, sw, sh, sh / 2);
+  ctx.strokeStyle = rgba(t.accent, 0.22); ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
+  if (R.main) R.hits.source = { x: sx - 10, y: cy - sh / 2 - 10, w: sw + 20, h: sh + 20 };
+  return xr - total - size * 0.7;
+}
+
+// Little signal-bars + battery glyphs (instrument header)
+function drawGlyphs(R, ctx, xr, cy, size, f, t) {
+  ctx.save();
+  ctx.fillStyle = t.accent; ctx.strokeStyle = t.accent; ctx.lineWidth = 1;
+  const bw = size * 2, bh = size;
+  let x = xr - bw;
+  ctx.strokeRect(x + 0.5, cy - bh / 2 + 0.5, bw - size * 0.3, bh);
+  ctx.fillRect(x + bw - size * 0.3, cy - bh * 0.2, size * 0.25, bh * 0.4);
+  ctx.fillRect(x + 2.5, cy - bh / 2 + 2.5, Math.max(0, (bw - size * 0.3 - 4) * ((f.battery ?? 100) / 100)), bh - 4);
+  x -= size * 1.2;
+  const h = size * 1.1;
+  for (let i = 3; i >= 0; i--) {
+    const bhh = h * (i + 1) / 4;
+    x -= size * 0.45;
+    ctx.globalAlpha = f.sig > i * 0.2 ? 1 : 0.25;
+    ctx.fillRect(x, cy + h / 2 - bhh, size * 0.3, bhh);
+  }
+  ctx.restore();
+  return x;
+}
+
+/* ============================================================
+   Modules — composable blocks; layouts place them
+   ============================================================ */
+const MOD = {
+  panel(R, r, f, it) {
+    const t = f.theme, ctx = R.ctx, rad = it.rad ?? 0;
+    ctx.save();
+    ctx.beginPath(); rr(ctx, r.x, r.y, r.w, r.h, rad);
+    ctx.fillStyle = it.fill || t.panel; ctx.fill();
+    if (t.scanlines && !it.noScan) { ctx.clip(); ctx.fillStyle = R.scanPattern(t.accent, t.scanlineOpacity || 0.04); ctx.fillRect(r.x, r.y, r.w, r.h); }
+    ctx.restore();
+    ctx.save();
+    ctx.beginPath(); rr(ctx, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, rad);
+    ctx.strokeStyle = it.border || rgba(t.accent, t.inverted ? 0.35 : 0.1); ctx.lineWidth = it.bw || 1; ctx.stroke();
+    ctx.restore();
+  },
+
+  statusRow(R, r, f) {
+    const t = f.theme, ctx = R.ctx, cy = r.y + r.h / 2, mr = r.h * 0.34;
+    drawMenu(R, ctx, r.x + mr, cy, mr, t);
+    if (!f.opts.clockPanel) return;
+    const glow = t.glowStrength ? r.h * 0.22 : 0, ch = r.h * 0.6;
+    let x = r.x + mr * 2 + r.h * 0.45;
+    x += seg7(ctx, f.clock.hm, x, cy - ch / 2, ch, t.accent, { glow, ghost: 0.07 }) + r.h * 0.4;
+    const rule = xx => { ctx.fillStyle = rgba(t.accent, 0.35); ctx.fillRect(xx, cy - r.h * 0.3, 1, r.h * 0.6); };
+    rule(x); x += r.h * 0.4;
+    const s1 = r.h * 0.2;
+    const w1 = text(ctx, f.clock.mdSlash, x, cy - r.h * 0.15, s1, t.accent, { glow: glow * 0.6, sp: 0.12 });
+    text(ctx, f.clock.dow, x, cy + r.h * 0.16, s1, t.accent, { glow: glow * 0.6, sp: 0.3 });
+    x += w1 + r.h * 0.4;
+    if (f.battery != null) { rule(x); x += r.h * 0.4; text(ctx, f.battery + '%', x, cy, r.h * 0.24, t.accent, { glow: glow * 0.6, sp: 0.1 }); }
+  },
+
+  header(R, r, f, it) {
+    const t = f.theme, ctx = R.ctx, cy = r.y + r.h / 2;
+    let x = r.x;
+    if (it.menu) { const mr = r.h * 0.46; drawMenu(R, ctx, x + mr, cy, mr, t); x += mr * 2 + r.h * 0.5; }
+    const size = Math.max(6, r.h * 0.4), glow = t.glowStrength ? size * 0.8 : 0;
+    const label = (t.header || '').replace('{SR}', (f.sr / 1000) + 'kHz');
+    const lw = text(ctx, label, x, cy, size, t.headerColour || t.accent, { sp: 0.22, glow, alpha: 0.92 });
+    let xr = r.x + r.w;
+    if (it.glyphs) xr = drawGlyphs(R, ctx, xr, cy, size, f, t) - size * 1.2;
+    const fx = drawFlags(R, ctx, xr, cy, size * 0.9, f, t);
+    if (t.headerRight) {
+      const hw = textW(ctx, t.headerRight, size, 0.22);
+      if (fx - size * 1.5 - hw > x + lw + size * 2)
+        text(ctx, t.headerRight, fx - size * 1.5, cy, size, t.headerRightColour || t.label, { sp: 0.22, align: 'right' });
+    }
+    if (it.rule) { ctx.fillStyle = rgba(t.label, 0.45); ctx.fillRect(r.x, r.y + r.h + 0.5, r.w, 1); }
+  },
+
+  analyser(R, r, f) { R.drawAnalyser(r, f); },
+
+  freqLabels(R, r, f, it) {
+    const t = f.theme, ctx = R.ctx, F = it.field, size = Math.max(6, r.h * 0.5), lr = Math.log(F_HI / F_LO);
+    let lastR = -1e9;
+    for (const hz of t.freqs) {
+      const s = hz >= 1000 ? (hz / 1000) + 'k' : String(hz), w = textW(ctx, s, size, 0.1);
+      const cx = clamp(F.x + F.w * Math.log(hz / F_LO) / lr, F.x + w / 2, F.x + F.w - w / 2);
+      if (cx - w / 2 < lastR + size * 0.6) continue;
+      text(ctx, s, cx, r.y + r.h / 2, size, t.label, { align: 'center', sp: 0.1 });
+      lastR = cx + w / 2;
+    }
+  },
+
+  footer(R, r, f) {
+    const t = f.theme, ctx = R.ctx, size = Math.max(6, r.h * 0.42), cy = r.y + r.h / 2, cx = r.x + r.w / 2;
+    const w = text(ctx, t.footer || '', cx, cy, size, t.label, { align: 'center', sp: 0.45 }), g = size * 1.5;
+    ctx.fillStyle = rgba(t.label, 0.45);
+    ctx.fillRect(r.x, cy, Math.max(0, cx - w / 2 - g - r.x), 1);
+    ctx.fillRect(cx + w / 2 + g, cy, Math.max(0, r.x + r.w - (cx + w / 2 + g)), 1);
+  },
+
+  artTile(R, r, f) {
+    const t = f.theme, ctx = R.ctx;
+    ctx.save(); ctx.beginPath(); rr(ctx, r.x, r.y, r.w, r.h, r.w * 0.14);
+    ctx.fillStyle = mix(t.panel, t.accent, 0.14); ctx.fill();
+    ctx.strokeStyle = rgba(t.accent, 0.4); ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
+    drawNote(ctx, r.x + r.w / 2, r.y + r.h / 2, r.w * 0.5, t.accent, t.glowStrength ? r.w * 0.12 : 0);
+  },
+
+  discIcon(R, r, f) {
+    const t = f.theme, ctx = R.ctx, rad = Math.min(r.w, r.h) * 0.46;
+    ctx.save();
+    ctx.translate(r.x + r.w / 2, r.y + r.h / 2); ctx.rotate(f.discAngle);
+    const g = ctx.createRadialGradient(0, 0, rad * 0.1, 0, 0, rad);
+    g.addColorStop(0, mix(t.panel, t.accent, 0.25)); g.addColorStop(1, mix(t.panel, t.accent, 0.07));
+    ctx.beginPath(); ctx.arc(0, 0, rad, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = rgba(t.accent, 0.5); ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = rgba(t.accent, 0.13);
+    for (let k = 0.42; k < 0.95; k += 0.07) { ctx.beginPath(); ctx.arc(0, 0, rad * k, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.fillStyle = rgba(t.accent, 0.2);
+    for (const a of [0, Math.PI]) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, rad * 0.95, a - 0.35, a + 0.35); ctx.closePath(); ctx.fill(); }
+    ctx.beginPath(); ctx.arc(0, 0, rad * 0.3, 0, Math.PI * 2); ctx.fillStyle = mix(t.panel, t.accent, 0.35); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, rad * 0.08, 0, Math.PI * 2); ctx.fillStyle = t.bg; ctx.fill();
+    ctx.restore();
+  },
+
+  // Clock / date / battery — stands in for the reference app's NOW PLAYING panel
+  infoPanel(R, r, f, it) {
+    const t = f.theme, ctx = R.ctx, pad = it.pad || 0, gl = t.glowStrength ? 0.22 : 0, cap = it.caption || 'LOCAL TIME';
+    const b = { x: r.x + pad, y: r.y + pad, w: r.w - pad * 2, h: r.h - pad * 2 };
+    const dateLine = f.clock.md + '  ' + f.clock.dow + (f.battery != null ? '   ' + f.battery + '%' : '');
+    if (it.box) {
+      ctx.save(); ctx.beginPath(); rr(ctx, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, it.rad || 0);
+      if (it.fill) { ctx.fillStyle = it.fill; ctx.fill(); }
+      ctx.strokeStyle = it.box; ctx.lineWidth = it.bw || 1;
+      if (it.boxGlow) { ctx.shadowColor = it.box; ctx.shadowBlur = it.boxGlow; }
+      ctx.stroke(); ctx.restore();
+    }
+    const v = it.v;
+    if (v === 'h') {                       // [tile] caption/date ........ CLOCK
+      let x = b.x;
+      if (it.tile) { const s = b.h * 0.8; MOD.artTile(R, { x, y: b.y + (b.h - s) / 2, w: s, h: s }, f); x += s + b.h * 0.3; }
+      const ch = Math.min(b.h * 0.66, (b.x + b.w - x) * 0.55 / 2.9);
+      seg7(ctx, f.clock.hm, b.x + b.w, b.y + (b.h - ch) / 2, ch, t.accent, { align: 'right', glow: gl * ch, ghost: 0.07 });
+      const fs = Math.max(6, Math.min(b.h * 0.15, 15));
+      text(ctx, it.tile ? cap : cap, x, b.y + b.h * 0.36, fs, t.accent, { sp: 0.32, alpha: 0.9 });
+      text(ctx, dateLine, x, b.y + b.h * 0.64, fs, t.label, { sp: 0.22 });
+      return;
+    }
+    if (v === 'stack') {                   // caption / CLOCK / date, left-aligned
+      const fs = Math.max(6, b.h * 0.11), ch = Math.min(b.h * 0.5, b.w / 2.95);
+      const total = fs * 2 + ch + fs * 2.2, y0 = b.y + Math.max(0, (b.h - total) / 2);
+      text(ctx, cap, b.x, y0 + fs * 0.6, fs, t.label, { sp: 0.32 });
+      seg7(ctx, f.clock.hm, b.x, y0 + fs * 1.8, ch, t.accent, { glow: gl * ch, ghost: 0.07 });
+      text(ctx, dateLine, b.x, y0 + fs * 1.8 + ch + fs * 1.5, fs, t.label, { sp: 0.22 });
+      return;
+    }
+    // 'v': tall — tile, caption, very large clock, date
+    const fs = Math.max(6, Math.min(b.w * 0.045, 16)), ts = it.tile ? Math.min(b.w * 0.28, b.h * 0.2) : 0;
+    const ch = Math.min(b.w / 2.95, b.h * 0.3);
+    const total = (ts ? ts + fs * 2 : 0) + fs * 1.6 + ch + fs * 2.6;
+    let y = b.y + Math.max(0, (b.h - total) / 2);
+    if (ts) { MOD.artTile(R, { x: b.x, y, w: ts, h: ts }, f); y += ts + fs * 2; }
+    text(ctx, cap, b.x, y + fs * 0.5, fs, t.label, { sp: 0.38 }); y += fs * 1.6;
+    seg7(ctx, f.clock.hm, b.x, y, ch, t.accent, { glow: gl * ch, ghost: 0.07 }); y += ch + fs * 2;
+    text(ctx, dateLine, b.x, y, fs * 1.1, t.accent, { sp: 0.22, alpha: 0.85 });
+  },
+
+  scaleMarks(R, r, f, it) {
+    const t = f.theme, ctx = R.ctx, F = it.field, size = Math.max(6, f.u * 1.3), x = r.x + r.w;
+    const marks = [['+12', F.y + size * 0.6], ['0', F.y + F.h / 2], ['−12', F.y + F.h - size * 0.6]];
+    for (const [s, y] of marks) {
+      text(ctx, s, x - size * 0.9, y, size, t.label, { align: 'right', sp: 0.05 });
+      ctx.fillStyle = rgba(t.label, 0.8); ctx.fillRect(x - size * 0.6, Math.round(y), size * 0.45, 1);
+    }
+  },
+
+  caption(R, r, f) {
+    const t = f.theme, ctx = R.ctx, cy = r.y + r.h / 2, s = r.h * 0.7;
+    const w = text(ctx, 'FFT', r.x, cy, s, t.accent, { weight: 800, sp: 0.06, glow: t.glowStrength ? s * 0.35 : 0 });
+    text(ctx, 'FAST FOURIER TRANSFORM', r.x + w + s * 0.6, cy, Math.max(6, s * 0.3), t.label, { sp: 0.42 });
+  },
+
+  gridFloor(R, r, f, it) {
+    const t = f.theme, ctx = R.ctx, hy = r.y + r.h * (it.horizon ?? 0.3), by = r.y + r.h, cx = r.x + r.w / 2;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(r.x, r.y - r.h, r.w, r.h * 2); ctx.clip();
+    const skyH = r.h * 0.6;
+    const sg = ctx.createLinearGradient(0, hy - skyH, 0, hy);
+    sg.addColorStop(0, rgba(t.gridHorizon, 0)); sg.addColorStop(1, rgba(t.gridHorizon, 0.16));
+    ctx.fillStyle = sg; ctx.fillRect(r.x, hy - skyH, r.w, skyH);
+    const fg = ctx.createLinearGradient(0, hy, 0, by);
+    fg.addColorStop(0, rgba(t.gridColour, 0.25)); fg.addColorStop(1, rgba(t.gridColour, 0.04));
+    ctx.fillStyle = fg; ctx.fillRect(r.x, hy, r.w, by - hy);
+    ctx.lineWidth = 1;
+    const n = 14;
+    ctx.strokeStyle = rgba(t.gridColour, 0.6);
+    ctx.beginPath();
+    for (let i = -n; i <= n; i++) { ctx.moveTo(cx + i * (r.w / n) * 0.1, hy); ctx.lineTo(cx + i * (r.w / n) * 1.5, by); }
+    ctx.stroke();
+    const ph = (f.now / 1000 * 0.5) % 1;
+    for (let k = 0; k < 18; k++) {
+      const d = k + 1 - ph, y = hy + (by - hy) / (1 + d * 0.45);
+      ctx.strokeStyle = rgba(t.gridColour, clamp((y - hy) / (by - hy) * 1.6, 0, 1) * 0.75);
+      ctx.beginPath(); ctx.moveTo(r.x, y); ctx.lineTo(r.x + r.w, y); ctx.stroke();
+    }
+    ctx.shadowColor = t.gridHorizon; ctx.shadowBlur = 14 * f.scale;
+    ctx.strokeStyle = t.gridHorizon; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(r.x, hy); ctx.lineTo(r.x + r.w, hy); ctx.stroke();
+    ctx.restore();
+  },
+
+  // Blueprint linework for the instrument layout: radar rings, crosshairs, sweep
+  lineWork(R, r, f, it) {
+    const t = f.theme, ctx = R.ctx, { cx, cy, rad } = it;
+    ctx.save();
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+    g.addColorStop(0, rgba(t.radarCentre, 0.32 + 0.25 * f.sig)); g.addColorStop(0.4, rgba(t.radarCentre, 0.1)); g.addColorStop(1, rgba(t.radarCentre, 0));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = t.lineWork; ctx.lineWidth = 1;
+    for (let k = 1; k <= 5; k++) { ctx.beginPath(); ctx.arc(cx, cy, rad * k / 5, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.beginPath();
+    for (let a = 0; a < 360; a += 5) {
+      const c = Math.cos(a * Math.PI / 180), s = Math.sin(a * Math.PI / 180), r1 = rad * (a % 30 === 0 ? 0.93 : a % 10 === 0 ? 0.96 : 0.98);
+      ctx.moveTo(cx + c * r1, cy + s * r1); ctx.lineTo(cx + c * rad, cy + s * rad);
+    }
+    ctx.stroke();
+    ctx.setLineDash([2, 5]);
+    ctx.beginPath(); ctx.moveTo(r.x, Math.round(cy) + 0.5); ctx.lineTo(r.x + r.w, Math.round(cy) + 0.5);
+    ctx.moveTo(Math.round(cx) + 0.5, r.y); ctx.lineTo(Math.round(cx) + 0.5, r.y + r.h); ctx.stroke();
+    ctx.setLineDash([]);
+    const ang = (f.now / 1000 * 0.7) % (Math.PI * 2);
+    if (ctx.createConicGradient) {
+      const cg = ctx.createConicGradient(ang - 0.9, cx, cy);
+      cg.addColorStop(0, rgba(t.radarCentre, 0)); cg.addColorStop(0.143, rgba(t.radarCentre, 0.16)); cg.addColorStop(0.1431, rgba(t.radarCentre, 0)); cg.addColorStop(1, rgba(t.radarCentre, 0));
+      ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.strokeStyle = rgba(t.radarCentre, 0.45);
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(ang) * rad, cy + Math.sin(ang) * rad); ctx.stroke();
+    const fs = Math.max(6, f.u * 1.1);
+    [['000', 0], ['090', 90], ['180', 180], ['270', 270]].forEach(([s, a]) => {
+      const rd = (a - 90) * Math.PI / 180;
+      text(ctx, s, cx + Math.cos(rd) * (rad + fs * 1.4), cy + Math.sin(rd) * (rad + fs * 1.4), fs, t.label, { align: 'center', sp: 0.1 });
+    });
+    // corner brackets
+    const L = fs * 2.5;
+    ctx.strokeStyle = t.label; ctx.beginPath();
+    for (const [x, y, dx, dy] of [[r.x, r.y, 1, 1], [r.x + r.w, r.y, -1, 1], [r.x, r.y + r.h, 1, -1], [r.x + r.w, r.y + r.h, -1, -1]]) {
+      ctx.moveTo(x + dx * L, y + 0.5 * dy); ctx.lineTo(x + 0.5 * dx, y + 0.5 * dy); ctx.lineTo(x + 0.5 * dx, y + dy * L);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
+/* ============================================================
+   Layouts — each returns the modules it uses and where
+   B = usable box (safe area + padding), u = 1% of the short side
+   ============================================================ */
+const LAYOUTS = {
+  wide(B, u, t, o) {
+    const port = B.h > B.w, items = [], sH = u * (port ? 8 : 9.5), gap = u * 1.4;
+    items.push({ m: 'statusRow', r: { x: B.x, y: B.y, w: B.w, h: sH } });
+    const P = { x: B.x, y: B.y + sH + gap, w: B.w, h: B.h - sH - gap };
+    items.push({ m: 'panel', r: P, rad: u * 2.2 });
+    const ip = u * 2.2, hh = u * 3.4, lh = o.labels ? u * 3.2 : 0;
+    items.push({ m: 'header', r: { x: P.x + ip, y: P.y + ip * 0.7, w: P.w - ip * 2, h: hh } });
+    const top = P.y + ip * 0.7 + hh + ip * 0.8;
+    const field = { x: P.x + ip, y: top, w: P.w - ip * 2, h: P.y + P.h - ip * 0.7 - lh - (lh ? u * 0.8 : 0) - top };
+    items.push({ m: 'analyser', r: field });
+    if (lh) items.push({ m: 'freqLabels', r: { x: field.x, y: field.y + field.h + u * 0.8, w: field.w, h: lh }, field });
+    return items;
+  },
+
+  deck(B, u, t, o) {
+    const port = B.h > B.w, items = [], ip = u * 2.2, hh = u * 3.8, iw = B.w - ip * 2;
+    items.push({ m: 'panel', r: B, rad: u * 1.8 });
+    let y = B.y + ip * 0.7;
+    items.push({ m: 'header', r: { x: B.x + ip, y, w: iw, h: hh }, menu: true });
+    y += hh + ip * 0.7;
+    const rh = port ? u * 15 : u * 17;
+    items.push({ m: 'discIcon', r: { x: B.x + ip, y, w: rh, h: rh } });
+    items.push({ m: 'artTile', r: { x: B.x + ip + rh + u * 1.6, y: y + rh * 0.04, w: rh * 0.92, h: rh * 0.92 } });
+    if (o.clockPanel) items.push({ m: 'infoPanel', r: { x: B.x + ip + rh * 2 + u * 4.5, y, w: iw - rh * 2 - u * 4.5, h: rh }, v: 'stack' });
+    y += rh + ip;
+    const fh = u * 3, lh = o.labels ? u * 3 : 0, bottom = B.y + B.h - ip * 0.6 - fh - u * 0.6;
+    const field = { x: B.x + ip, y, w: iw, h: bottom - lh - (lh ? u * 0.6 : 0) - y };
+    items.push({ m: 'analyser', r: field });
+    if (lh) items.push({ m: 'freqLabels', r: { x: field.x, y: field.y + field.h + u * 0.6, w: field.w, h: lh }, field });
+    items.push({ m: 'footer', r: { x: B.x + ip, y: bottom + u * 0.6, w: iw, h: fh } });
+    return items;
+  },
+
+  split(B, u, t, o) {
+    const port = B.h > B.w, items = [], g = u * 1.4;
+    let L = B, Rp = null;
+    if (o.clockPanel && port) { const ih = B.h * 0.22; Rp = { x: B.x, y: B.y, w: B.w, h: ih }; L = { x: B.x, y: B.y + ih + g, w: B.w, h: B.h - ih - g }; }
+    else if (o.clockPanel) { const lw = B.w * 0.65; L = { x: B.x, y: B.y, w: lw, h: B.h }; Rp = { x: B.x + lw + g, y: B.y, w: B.w - lw - g, h: B.h }; }
+    items.push({ m: 'panel', r: L, rad: u * 1.2, border: t.panelBorder, bw: 1.5 });
+    const ip = u * 2, hh = u * 3.6, ch = u * 4, lh = o.labels ? u * 3 : 0, sm = u * 5;
+    let y = L.y + ip * 0.7;
+    items.push({ m: 'header', r: { x: L.x + ip, y, w: L.w - ip * 2, h: hh }, menu: true });
+    y += hh + ip * 0.8;
+    const bottom = L.y + L.h - ip * 0.6 - ch;
+    const field = { x: L.x + ip + sm, y, w: L.w - ip * 2 - sm, h: bottom - u * 0.8 - lh - (lh ? u * 0.6 : 0) - y };
+    items.push({ m: 'scaleMarks', r: { x: L.x + ip, y: field.y, w: sm, h: field.h }, field });
+    items.push({ m: 'analyser', r: field });
+    if (lh) items.push({ m: 'freqLabels', r: { x: field.x, y: field.y + field.h + u * 0.6, w: field.w, h: lh }, field });
+    items.push({ m: 'caption', r: { x: L.x + ip, y: bottom, w: L.w - ip * 2, h: ch } });
+    if (Rp) {
+      items.push({ m: 'panel', r: Rp, rad: u * 1.2, border: t.panelBorder, fill: mix(t.panel, t.accent, 0.05), bw: 1.5 });
+      items.push({ m: 'infoPanel', r: Rp, pad: u * 3, tile: true, caption: 'CLOCK', v: port ? 'h' : 'v' });
+    }
+    return items;
+  },
+
+  synth(B, u, t, o) {
+    const port = B.h > B.w, items = [], ip = u * 2.2, hh = u * 3.6;
+    items.push({ m: 'panel', r: B, rad: u * 1.8, noScan: true });
+    let y = B.y + ip * 0.7;
+    items.push({ m: 'header', r: { x: B.x + ip, y, w: B.w - ip * 2, h: hh }, menu: true });
+    y += hh + ip;
+    const bh = o.clockPanel ? (port ? u * 13 : u * 15) : 0, lh = o.labels ? u * 3 : 0, floorExtra = u * 3;
+    const boxY = B.y + B.h - ip * 0.8 - bh;
+    const fieldBottom = (bh ? boxY - ip : B.y + B.h - ip) - lh - floorExtra;
+    const field = { x: B.x + ip + u * 3, y, w: B.w - ip * 2 - u * 6, h: fieldBottom - y };
+    const fy = field.y + field.h * 0.35;
+    items.push({ m: 'gridFloor', r: { x: B.x + 1, y: fy, w: B.w - 2, h: fieldBottom + floorExtra + lh - fy }, horizon: 0.22 });
+    items.push({ m: 'analyser', r: field });
+    if (lh) items.push({ m: 'freqLabels', r: { x: field.x, y: fieldBottom + floorExtra * 0.5, w: field.w, h: lh }, field });
+    if (bh) items.push({ m: 'infoPanel', r: { x: B.x + ip, y: boxY, w: B.w - ip * 2, h: bh }, pad: u * 2, tile: true, v: 'h',
+      box: t.accent, boxGlow: u * 1.6, rad: u * 2.4, bw: 1.5, fill: rgba(t.bg, 0.6) });
+    return items;
+  },
+
+  instrument(B, u, t, o) {
+    const port = B.h > B.w, items = [], hh = u * 3.6, top = B.y + hh + u * 2.5;
+    let cx, cy, rad, info, A;
+    if (!port) {
+      cx = B.x + B.w * 0.74; cy = B.y + B.h * 0.62; rad = Math.min(B.h * 0.33, B.w * 0.22);
+      info = { x: B.x + B.w * 0.6, y: top, w: B.w * 0.4, h: B.h * 0.2 };
+      A = { x: B.x, y: B.y + B.h * 0.42, w: B.w * 0.5, h: B.h * 0.58 };
+    } else {
+      cx = B.x + B.w * 0.5; cy = B.y + B.h * 0.4; rad = B.w * 0.34;
+      info = { x: B.x + B.w * 0.42, y: top, w: B.w * 0.58, h: B.h * 0.12 };
+      A = { x: B.x, y: B.y + B.h * 0.64, w: B.w, h: B.h * 0.36 };
+    }
+    items.push({ m: 'lineWork', r: { x: B.x, y: B.y + hh + u * 1.2, w: B.w, h: B.h - hh - u * 1.2 }, cx, cy, rad });
+    items.push({ m: 'header', r: { x: B.x, y: B.y, w: B.w, h: hh }, menu: true, glyphs: true, rule: true });
+    if (o.clockPanel) items.push({ m: 'infoPanel', r: info, pad: u * 1.6, v: 'stack', box: t.lineWork, fill: rgba(t.bg, 0.9) });
+    items.push({ m: 'panel', r: A, rad: 0, border: t.lineWork, noScan: true });
+    const ip = u * 1.6, lh = o.labels ? u * 2.8 : 0;
+    const field = { x: A.x + ip, y: A.y + ip, w: A.w - ip * 2, h: A.h - ip * 2 - lh - (lh ? u * 0.4 : 0) };
+    items.push({ m: 'analyser', r: field });
+    if (lh) items.push({ m: 'freqLabels', r: { x: field.x, y: field.y + field.h + u * 0.4, w: field.w, h: lh }, field });
+    return items;
+  }
+};
+
+/* ============================================================
+   Renderer
+   ============================================================ */
+const _segCols = new Map();
+function segColours(t, s) {
+  const k = t.id + '|' + s;
+  let c = _segCols.get(k);
+  if (c) return c;
+  c = [];
+  for (let j = 0; j < s; j++) {
+    const x = s > 1 ? j / (s - 1) : 0;
+    if (t.colourMode === 'gradient') c.push(mix(t.segLow, t.segHigh, x));
+    else if (t.colourMode === 'level') c.push(x < 0.6 ? t.levelLow : x < 0.85 ? t.levelMid : t.levelHigh);
+    else c.push(j >= Math.ceil(s * 0.8) ? t.segHigh : t.segLow);
+  }
+  _segCols.set(k, c);
+  return c;
+}
+function colourStops(g, t) {
+  if (t.colourMode === 'gradient') { g.addColorStop(0, t.segLow); g.addColorStop(1, t.segHigh); }
+  else if (t.colourMode === 'level') {
+    g.addColorStop(0, t.levelLow); g.addColorStop(0.6, t.levelLow); g.addColorStop(0.6, t.levelMid);
+    g.addColorStop(0.85, t.levelMid); g.addColorStop(0.85, t.levelHigh); g.addColorStop(1, t.levelHigh);
+  } else { g.addColorStop(0, t.segLow); g.addColorStop(0.8, t.segLow); g.addColorStop(0.8, t.segHigh); g.addColorStop(1, t.segHigh); }
+}
+
+class Renderer {
+  constructor(canvas, main) {
+    this.c = canvas; this.ctx = canvas.getContext('2d'); this.main = main;
+    this.lit = document.createElement('canvas'); this.lx = this.lit.getContext('2d');
+    this.grid = document.createElement('canvas'); this.gx = this.grid.getContext('2d');
+    this.bl = [0, 1, 2].map(() => { const c = document.createElement('canvas'); return { c, x: c.getContext('2d') }; });
+    this.gridKey = ''; this.hits = {}; this.pats = new Map(); this.litN = new Int16Array(64);
+    this.W = 0; this.H = 0; this.dpr = 1;
+  }
+  resize(W, H, dpr) {
+    this.W = W; this.H = H; this.dpr = dpr;
+    const w = Math.round(W * dpr), h = Math.round(H * dpr);
+    for (const c of [this.c, this.lit, this.grid]) { c.width = w; c.height = h; }
+    let s = 4;
+    for (const b of this.bl) { b.c.width = Math.max(1, Math.ceil(w / s)); b.c.height = Math.max(1, Math.ceil(h / s)); s *= 2; }
+    this.gridKey = '';
+  }
+  scanPattern(col, a) {
+    const k = col + a;
+    let p = this.pats.get(k);
+    if (!p) {
+      const c = document.createElement('canvas'); c.width = 1; c.height = 3;
+      const x = c.getContext('2d'); x.fillStyle = rgba(col, a); x.fillRect(0, 0, 1, 1);
+      p = this.ctx.createPattern(c, 'repeat'); this.pats.set(k, p);
+    }
+    return p;
+  }
+  render(f) {
+    const { ctx, dpr, W, H } = this, t = f.theme;
+    this.hits = {};
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+    ctx.fillStyle = t.bg; ctx.fillRect(0, 0, W, H);
+    const s = f.safe || { t: 0, r: 0, b: 0, l: 0 }, u = Math.min(W, H) / 100;
+    f.u = u; f.scale = clamp(u / 8, 0.25, 1.5);
+    const pad = Math.max(8 * f.scale, u * 2.2);
+    const B = { x: s.l + pad, y: s.t + pad, w: W - s.l - s.r - pad * 2, h: H - s.t - s.b - pad * 2 };
+    for (const it of LAYOUTS[t.layout](B, u, t, f.opts)) MOD[it.m](this, it.r, f, it);
+  }
+  geom(r, n, s, f) {
+    const t = f.theme, sc = f.scale;
+    let g = t.barGap * sc, barW = (r.w - g * (n - 1)) / n;
+    if (barW < g * 1.5) { g = Math.max(1, barW * 0.3); barW = (r.w - g * (n - 1)) / n; }
+    const G = { g, barW, cont: !s };
+    if (!s) { G.rad = Math.min(t.radius * sc, barW / 2); return G; }
+    let sg = Math.max(1, t.segGap * sc), segH = (r.h - sg * (s - 1)) / s;
+    if (segH < sg * 1.2) { sg = Math.max(0.5, segH * 0.3); segH = (r.h - sg * (s - 1)) / s; }
+    G.sg = sg; G.segH = segH;
+    if (t.radius >= 999) {
+      // Vertical capsules ~2:1. Wide bands get several capsule columns so the lamps keep their shape.
+      const target = segH * 0.5, k = Math.max(1, Math.floor((barW + sg) / (target + sg)));
+      G.k = k; G.cw = Math.min((barW - sg * (k - 1)) / k, segH * 0.62); G.rad = Math.min(G.cw, segH) / 2;
+      G.cx = (barW - (G.cw * k + sg * (k - 1))) / 2;                     // centre the capsules in the band slot
+    } else { G.k = 1; G.cw = barW; G.cx = 0; G.rad = Math.min(t.radius * sc, barW / 2, segH / 2); }
+    return G;
+  }
+  halves(r, f) {
+    if (f.chans.length < 2) return [[r, 1]];
+    const gap = Math.max(3, r.h * 0.025), h = (r.h - gap) / 2;          // mirrored: L up, R down
+    return [[{ x: r.x, y: r.y, w: r.w, h }, 1], [{ x: r.x, y: r.y + h + gap, w: r.w, h }, -1]];
+  }
+  segXY(G, r, dir, i, c, j) {
+    return [r.x + i * (G.barW + G.g) + G.cx + c * (G.cw + G.sg), dir > 0 ? r.y + r.h - (j + 1) * G.segH - j * G.sg : r.y + j * (G.segH + G.sg)];
+  }
+  drawAnalyser(r, f) {
+    const t = f.theme, ctx = this.ctx, n = f.chans[0].v.length, s = f.segs, halves = this.halves(r, f);
+    // 1. unlit segment grid (cached) — the panel never looks blank
+    const key = [r.x, r.y, r.w, r.h, n, s, t.id, halves.length, this.c.width, this.c.height].join(',');
+    if (key !== this.gridKey) {
+      this.gridKey = key;
+      const g = this.gx;
+      g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, this.grid.width, this.grid.height);
+      g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      g.globalAlpha = t.segOffAlpha ?? 1; g.fillStyle = t.segOff; g.beginPath();
+      for (const [hr, dir] of halves) {
+        const G = this.geom(hr, n, s, f);
+        for (let i = 0; i < n; i++) {
+          if (G.cont) { rr(g, hr.x + i * (G.barW + G.g), hr.y, G.barW, hr.h, G.rad); continue; }
+          for (let c = 0; c < G.k; c++) for (let j = 0; j < s; j++) { const [x, y] = this.segXY(G, hr, dir, i, c, j); rr(g, x, y, G.cw, G.segH, G.rad); }
+        }
+      }
+      g.fill(); g.globalAlpha = 1;
+    }
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(this.grid, 0, 0); ctx.restore();
+
+    // 2. lit segments + peak caps on their own layer
+    const lx = this.lx, LW = this.lit.width, LH = this.lit.height;
+    lx.setTransform(1, 0, 0, 1, 0, 0);
+    if (t.persistence) {
+      lx.globalCompositeOperation = 'destination-out'; lx.fillStyle = `rgba(0,0,0,${1 - t.persistence})`;
+      lx.fillRect(0, 0, LW, LH); lx.globalCompositeOperation = 'source-over';
+    } else lx.clearRect(0, 0, LW, LH);
+    lx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    halves.forEach(([hr, dir], hi) => this.drawLit(lx, hr, dir, this.geom(hr, n, s, f), f.chans[hi], f, n, s));
+
+    // 3. bloom: downsampled copies of the lit layer, added back generously, then the crisp layer on top
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (t.glowStrength > 0) {
+      let src = this.lit;
+      for (const b of this.bl) { b.x.globalCompositeOperation = 'copy'; b.x.imageSmoothingEnabled = true; b.x.drawImage(src, 0, 0, b.c.width, b.c.height); src = b.c; }
+      const k = t.glowStrength / 22;
+      ctx.imageSmoothingEnabled = true; ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = Math.min(1, 0.95 * k); ctx.drawImage(this.bl[2].c, 0, 0, LW, LH);
+      ctx.globalAlpha = Math.min(1, 0.8 * k); ctx.drawImage(this.bl[1].c, 0, 0, LW, LH);
+      ctx.globalAlpha = Math.min(1, 0.55 * k); ctx.drawImage(this.bl[0].c, 0, 0, LW, LH);
+      ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+    }
+    ctx.drawImage(this.lit, 0, 0);
+    if (t.scanlines) { ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); ctx.fillStyle = this.scanPattern('#000000', 0.3); ctx.fillRect(r.x, r.y, r.w, r.h); }
+    ctx.restore();
+  }
+  drawLit(x, r, dir, G, ch, f, n, s) {
+    const t = f.theme, band = t.colourMode === 'band';
+    const bandCol = i => hslHex((f.hue + i * (t.hueStep || 6)) % 360, 100, 55);
+    if (G.cont) {
+      let grad = null;
+      if (!band) { grad = dir > 0 ? x.createLinearGradient(0, r.y + r.h, 0, r.y) : x.createLinearGradient(0, r.y, 0, r.y + r.h); colourStops(grad, t); }
+      const ct = Math.max(2, r.h * 0.018);
+      for (let i = 0; i < n; i++) {
+        const bx = r.x + i * (G.barW + G.g), h = ch.v[i] * r.h;
+        if (h > 0.5) { x.beginPath(); rr(x, bx, dir > 0 ? r.y + r.h - h : r.y, G.barW, h, G.rad); x.fillStyle = band ? bandCol(i) : grad; x.fill(); }
+        if (f.holdOn && ch.p[i] > 0.01) {
+          const py = clamp(dir > 0 ? r.y + r.h - ch.p[i] * r.h - ct * 0.5 : r.y + ch.p[i] * r.h - ct * 0.5, r.y, r.y + r.h - ct);
+          x.fillStyle = t.peak; x.fillRect(bx, py, G.barW, ct);
+        }
+      }
+      return;
+    }
+    const lit = this.litN;
+    for (let i = 0; i < n; i++) lit[i] = Math.min(s, Math.floor(ch.v[i] * s + 0.35));
+    const add = (i, j) => { for (let c = 0; c < G.k; c++) { const [sx, sy] = this.segXY(G, r, dir, i, c, j); rr(x, sx, sy, G.cw, G.segH, G.rad); } };
+    if (band) {
+      for (let i = 0; i < n; i++) {
+        if (!lit[i]) continue;
+        x.beginPath(); for (let j = 0; j < lit[i]; j++) add(i, j);
+        x.fillStyle = bandCol(i); x.fill();
+      }
+    } else {
+      const cols = segColours(t, s);
+      for (let j = 0; j < s; j++) {
+        let any = false; x.beginPath();
+        for (let i = 0; i < n; i++) if (lit[i] > j) { any = true; add(i, j); }
+        if (any) { x.fillStyle = cols[j]; x.fill(); }
+      }
+    }
+    if (f.holdOn) {
+      let any = false; x.beginPath();
+      for (let i = 0; i < n; i++) {
+        const pv = ch.p[i] * s + 0.35;
+        if (pv < 1) continue;
+        any = true; add(i, Math.min(s - 1, Math.floor(pv) - 1));
+      }
+      if (any) { x.fillStyle = t.peak; x.fill(); }
+    }
+  }
+}
+
+/* ============================================================
+   Start / error overlay
+   ============================================================ */
+function buildLamps() {
+  const n = 24;
+  let h = '';
+  for (let i = 0; i < n; i++) {
+    const lvl = Math.round(clamp(4.6 - 2.6 * (i / n) + 1.2 * Math.sin(i * 1.3), 1, 6));
+    h += '<i>' + Array.from({ length: 6 }, (_, j) => `<b class="${j < lvl ? 'on' : ''}"></b>`).join('') + '</i>';
+  }
+  $('ovLamps').innerHTML = h;
+}
+function showOverlay(title, sub, buttons, err) {
+  $('ovTitle').textContent = title;
+  $('ovTitle').classList.toggle('err', !!err);
+  $('ovSub').innerHTML = sub;
+  $('ovBtns').innerHTML = buttons.map(b => `<button class="ovb" data-ov="${b[0]}">${b[1]}</button>`).join('');
+  $('overlay').classList.remove('hidden');
+  App.overlay = err ? 'error' : 'start';
+}
+function showStart() { showOverlay('TAP TO START', srcName() + (DEMO ? ' &middot; DEMO SIGNAL' : ''), [], false); }
+function hideOverlay() { $('overlay').classList.add('hidden'); App.overlay = null; }
+function showError(code) {
+  App.running = false;
+  const M = {
+    NO_LINE: ['NO LINE INPUT', 'CHECK INTERFACE', [['mic', 'USE MICROPHONE'], ['retry', 'RETRY']]],
+    NO_MIC: ['NO MICROPHONE', 'NO BUILT-IN INPUT FOUND', [['line', 'USE LINE IN'], ['retry', 'RETRY']]],
+    DENIED: ['NO INPUT', 'GRANT MICROPHONE ACCESS IN SETTINGS', [['retry', 'RETRY']]],
+    INSECURE: ['NO INPUT', 'THIS PAGE MUST BE SERVED OVER HTTPS', []]
+  };
+  const [t, s, b] = M[code] || M.DENIED;
+  showOverlay(t, s, b, true);
+}
+
+async function start() {
+  if (App.busy) return;
+  App.busy = true;
+  ensureCtx();                                   // inside the tap gesture (iOS)
+  try {
+    const trackOk = A.live && (DEMO || (A.track && A.track.readyState === 'live'));
+    if (!trackOk) await openSource(S.source);
+    if (A.ctx.state !== 'running') { try { await A.ctx.resume(); } catch (e) { } }
+    if (A.ctx.state !== 'running') { showStart(); return; }
+    App.running = true;
+    P.fade = 0; P.fadeTarget = 1;
+    hideOverlay();
+    requestWake();
+  } catch (e) {
+    teardown();
+    showError(e.code || 'DENIED');
+  } finally { App.busy = false; }
+}
+
+// Switch source without reloading: bars sink, graph is rebuilt, bars rise.
+async function switchSource(to, force) {
+  if (to === S.source && !force) return;
+  S.source = to; save();
+  if (UI.open) buildSettings();
+  if (!App.running) { if (App.overlay === 'start') showStart(); return; }
+  App.busy = true;
+  P.fadeTarget = 0;
+  await sleep(170);
+  try { await openSource(to); P.fadeTarget = 1; requestWake(); }
+  catch (e) { teardown(); showError(e.code || 'DENIED'); }
+  finally { App.busy = false; if (UI.open) buildSettings(); }
+}
+
+$('overlay').addEventListener('click', e => {
+  const b = e.target.closest('[data-ov]');
+  if (b) {
+    const a = b.dataset.ov;
+    if (a === 'mic' || a === 'line') { S.source = a; save(); }
+    start();
+    return;
+  }
+  if (App.overlay === 'start') start();
+});
+
+/* ============================================================
+   Settings panel
+   ============================================================ */
+const thumbCache = new Map();
+function thumbFrame(t) {
+  const n = 24, v = new Float32Array(n), p = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    v[i] = clamp(0.8 - 0.45 * (i / n) + 0.17 * Math.sin(i * 1.7) + 0.08 * Math.cos(i * 0.6), 0.06, 0.94);
+    p[i] = Math.min(1, v[i] + 0.07 + 0.05 * ((i * 7) % 3));
+  }
+  const rt = resolveTheme(t, 2500);
+  return { now: 0, theme: rt, hue: rt.hue || 0, chans: [{ v, p }], segs: t.segments ?? 16, opts: { labels: true, clockPanel: true },
+    flags: { st: true, dsp: true, loud: true, over: false, source: 'line' }, clock: { hm: '12:33', mdSlash: '10/05', md: '10-5', dow: 'MON' },
+    battery: 40, sr: 48000, sig: 0.6, discAngle: 0.4, safe: null, holdOn: true };
+}
+function thumbFor(t) {
+  let c = thumbCache.get(t.id);
+  if (!c) {
+    c = document.createElement('canvas');
+    const r = new Renderer(c, false);
+    r.resize(400, 250, 2);
+    r.render(thumbFrame(t));
+    thumbCache.set(t.id, c);
+  }
+  return c;
+}
+
+function optRow(label, key, opts, cur, sub = '', disabled = () => false) {
+  return `<div class="row"><div class="lbl">${label}${sub ? `<small>${sub}</small>` : ''}</div><div class="opts">` +
+    opts.map(([v, txt]) => `<button class="opt${String(v) === String(cur) ? ' on' : ''}" data-k="${key}" data-v="${v}"${disabled(v) ? ' disabled' : ''}>${txt}</button>`).join('') +
+    '</div></div>';
+}
+function sliderRow(label, sub, key, min, max, val, unit) {
+  return `<div class="row"><div class="lbl">${label}${sub ? `<small>${sub}</small>` : ''}</div><div class="slider">` +
+    `<input type="range" min="${min}" max="${max}" step="1" value="${val}" data-s="${key}"><span class="val" id="v-${key}">${fmtVal(val, unit)}</span></div></div>`;
+}
+const fmtVal = (v, unit) => unit === '%' ? v + '%' : (v < 0 ? '−' + Math.abs(v) : v) + ' dBFS';
+const onOff = [[true, 'ON'], [false, 'OFF']];
+
+function buildSettings() {
+  const sh = $('sheet'), scroll = sh.scrollTop, ps = S.perSource[S.source], mic = S.source === 'mic', sn = srcName();
+  const devCur = S.devices[S.source];
+  const devOpts = [`<option value="">AUTO — ${mic ? 'BUILT-IN MICROPHONE' : 'EXTERNAL INTERFACE'}</option>`]
+    .concat(A.devices.filter(d => d.deviceId !== 'communications' && d.deviceId !== 'default')
+      .map((d, i) => `<option value="${esc(d.deviceId)}"${d.deviceId === devCur ? ' selected' : ''}>${esc((d.label || 'INPUT ' + (i + 1)).toUpperCase())}</option>`)).join('');
+  const status = App.running && A.live
+    ? `ACTIVE INPUT: <b>${esc((A.deviceLabel || '—').toUpperCase())}</b> &middot; ${P.sr / 1000} kHz &middot; ${A.stereo ? '2 CH' : '1 CH'}`
+    : 'NOT RUNNING';
+  sh.innerHTML =
+    `<div class="sh-head"><div class="sh-title">SETTINGS</div><button class="x" data-act="close" aria-label="Close">×</button></div>` +
+    optRow('SOURCE', 'source', [['line', 'LINE IN'], ['mic', 'MICROPHONE']], S.source, 'LONG-PRESS LINE/MIC FLAG') +
+    `<div class="row full"><div class="lbl">THEME</div><div class="themes">` +
+    THEMES.map(t => `<button class="card" data-theme="${t.id}" style="background:${t.panel};border-color:${t.id === S.theme ? t.accent : 'transparent'}">` +
+      `<span style="color:${t.accent}">${t.name.toUpperCase()}</span></button>`).join('') + `</div></div>` +
+    optRow('BANDS', 'bands', BAND_OPTS.map(v => [v, v]), S.bands, P.bandCap < S.bands ? 'REDUCED FOR SPEED: ' + effBands() : '') +
+    optRow('SEGMENTS', 'segments', SEG_OPTS.map(v => [v, v || 'CONT']), S.segments) +
+    optRow('CHANNELS', 'channels', [['mono', 'MONO'], ['stereo', 'STEREO']], mic ? 'mono' : S.channels, mic ? 'MIC IS MONO' : '', v => mic && v === 'stereo') +
+    optRow('PEAK HOLD', 'peakHold', HOLD_OPTS.map(v => [v, v ? v + ' MS' : 'OFF']), S.peakHold) +
+    optRow('DECAY', 'decay', [['slow', 'SLOW'], ['medium', 'MEDIUM'], ['fast', 'FAST']], S.decay) +
+    sliderRow('FLOOR', sn, 'floor', -100, -40, ps.floor) +
+    sliderRow('CEILING', sn, 'ceil', -60, 0, ps.ceil) +
+    optRow('TILT', 'tilt', onOff, ps.tilt, sn + ' &middot; +3 DB/OCT') +
+    optRow('LABELS', 'labels', onOff, S.labels) +
+    optRow('CLOCK PANEL', 'clockPanel', onOff, S.clockPanel) +
+    `<div class="row"><div class="lbl">INPUT DEVICE<small>${sn}</small></div><select id="devSel">${devOpts}</select></div>` +
+    sliderRow('BRIGHTNESS', '', 'brightness', 20, 100, S.brightness, '%') +
+    `<div class="note">${status}<br>` +
+    (WAKE_OK ? '' : 'SCREEN WAKE LOCK IS NOT AVAILABLE HERE — SET AUTO-LOCK TO NEVER IN IPAD SETTINGS.<br>') +
+    'TWO-FINGER TAP OPENS SETTINGS &middot; TAP OUTSIDE TO CLOSE</div>';
+  sh.querySelectorAll('.card').forEach(card => card.insertBefore(thumbFor(THEMES.find(t => t.id === card.dataset.theme)), card.firstChild));
+  sh.scrollTop = scroll;
+}
+function openSettings() {
+  UI.open = true;
+  buildSettings();
+  $('settings').classList.remove('hidden');
+  listInputs().then(d => { if (d.length && d.some(x => x.label)) { A.devices = d; if (UI.open) buildSettings(); } });
+}
+function closeSettings() { UI.open = false; $('settings').classList.add('hidden'); }
+
+function applyTheme() {
+  const t = theme(), st = document.documentElement.style;
+  st.setProperty('--bg', t.bg); st.setProperty('--panel', t.panel); st.setProperty('--accent', t.accent);
+  st.setProperty('--label', t.label); st.setProperty('--segoff', t.segOff);
+  st.setProperty('--line', rgba(t.accent, 0.22)); st.setProperty('--glow', rgba(t.accent, t.inverted ? 0.15 : 0.55));
+  $('themeColor').setAttribute('content', t.bg);
+}
+function applyBrightness() { document.documentElement.style.setProperty('--bri', S.brightness / 100); }
+
+$('settings').addEventListener('click', e => {
+  if (e.target === $('settings')) { closeSettings(); return; }       // tap outside the panel
+  const b = e.target.closest('[data-k],[data-theme],[data-act]');
+  if (!b || b.disabled) return;
+  if (b.dataset.act === 'close') { closeSettings(); return; }
+  if (b.dataset.theme) {
+    S.theme = b.dataset.theme;
+    const t = theme();
+    if (t.segments !== undefined) S.segments = t.segments;
+    save(); applyTheme(); buildSettings();
+    return;
+  }
+  const k = b.dataset.k, raw = b.dataset.v;
+  const v = raw === 'true' ? true : raw === 'false' ? false : /^-?\d+$/.test(raw) ? +raw : raw;
+  if (k === 'source') { switchSource(v); return; }
+  if (k === 'tilt') S.perSource[S.source].tilt = v;
+  else S[k] = v;
+  if (k === 'bands') P.bandCap = 99;
+  save(); buildSettings();
+});
+$('settings').addEventListener('input', e => {
+  const el = e.target, k = el.dataset.s;
+  if (!k) return;
+  const ps = S.perSource[S.source];
+  let v = +el.value;
+  if (k === 'floor') { v = Math.min(v, ps.ceil - 6); ps.floor = v; }
+  else if (k === 'ceil') { v = Math.max(v, ps.floor + 6); ps.ceil = v; }
+  else { S.brightness = v; applyBrightness(); }
+  el.value = v;
+  $('v-' + k).textContent = fmtVal(v, k === 'brightness' ? '%' : '');
+  save();
+});
+$('settings').addEventListener('change', e => {
+  if (e.target.id !== 'devSel') return;
+  S.devices[S.source] = e.target.value; save();
+  if (App.running) switchSource(S.source, true);
+});
+
+/* ============================================================
+   Touch: menu button, long-press source flag, two-finger tap
+   ============================================================ */
+const cv = $('cv'), R = new Renderer(cv, true);
+const inRect = (p, r) => r && p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+const ptrs = new Map();
+let lpTimer = null;
+const cancelLP = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
+cv.addEventListener('pointerdown', e => {
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now() });
+  if (ptrs.size === 2) { cancelLP(); openSettings(); return; }
+  if (inRect({ x: e.clientX, y: e.clientY }, R.hits.source))
+    lpTimer = setTimeout(() => { lpTimer = null; switchSource(S.source === 'line' ? 'mic' : 'line'); }, 600);
+});
+cv.addEventListener('pointerup', e => {
+  const d = ptrs.get(e.pointerId);
+  ptrs.delete(e.pointerId);
+  cancelLP();
+  if (d && ptrs.size === 0 && performance.now() - d.t < 500 && inRect({ x: e.clientX, y: e.clientY }, R.hits.menu)) openSettings();
+});
+cv.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); cancelLP(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeSettings();
+  else if (e.key === 's' && !UI.open) openSettings();
+});
+document.addEventListener('gesturestart', e => e.preventDefault());   // iOS pinch-zoom
+
+/* ============================================================
+   Lifecycle, resize, main loop
+   ============================================================ */
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (App.running) {
+    const lost = !A.ctx || A.ctx.state !== 'running' || (!DEMO && (!A.track || A.track.readyState === 'ended'));
+    if (lost) { App.running = false; showStart(); }   // never show a frozen analyser
+    else requestWake();
+  }
+});
+
+let SAFE = { t: 0, r: 0, b: 0, l: 0 };
+function onResize() {
+  const cs = getComputedStyle($('safe'));
+  SAFE = { t: parseFloat(cs.paddingTop) || 0, r: parseFloat(cs.paddingRight) || 0, b: parseFloat(cs.paddingBottom) || 0, l: parseFloat(cs.paddingLeft) || 0 };
+  R.resize(window.innerWidth, window.innerHeight, Math.min(window.devicePixelRatio || 1, 3));
+}
+addEventListener('resize', onResize);
+addEventListener('orientationchange', () => setTimeout(onResize, 250));
+
+const DOW = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+let _clk = { s: -1 };
+function clock() {
+  const d = new Date(), s = Math.floor(d.getTime() / 1000);
+  if (s !== _clk.s) {
+    const p = n => String(n).padStart(2, '0');
+    _clk = { s, hm: p(d.getHours()) + ':' + p(d.getMinutes()), mdSlash: p(d.getMonth() + 1) + '/' + p(d.getDate()),
+      md: (d.getMonth() + 1) + '-' + d.getDate(), dow: DOW[d.getDay()] };
+  }
+  return _clk;
+}
+
+// If frames get slow, step the band count down rather than drop frames.
+function perf(ms, now) {
+  if (ms > 100) return;
+  P.ema = P.ema * 0.95 + ms * 0.05;
+  if (App.running && P.ema > 24) {
+    if (!P.slowSince) P.slowSince = now;
+    else if (now - P.slowSince > 3000 && BAND_OPTS.indexOf(effBands()) > 0) { P.bandCap = BAND_OPTS[BAND_OPTS.indexOf(effBands()) - 1]; P.slowSince = 0; P.ema = 16; }
+  } else P.slowSince = 0;
+}
+
+let lastT = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const ms = now - lastT, dt = Math.min(0.1, ms / 1000);
+  lastT = now;
+  perf(ms, now);
+  if (P.n !== effBands()) setupBands();
+  process(now, dt);
+  const t = resolveTheme(theme(), now), ps = S.perSource[S.source];
+  R.render({
+    now, theme: t, hue: t.hue || 0,
+    chans: stereoDisplay() ? [P.chans.L, P.chans.R] : [P.chans.M],
+    segs: S.segments, opts: { labels: S.labels, clockPanel: S.clockPanel },
+    flags: { st: A.live && A.stereo, dsp: ps.tilt || S.source === 'mic', loud: now < P.loudUntil, over: now < P.overUntil, source: S.source },
+    clock: clock(), battery: BAT.pct, sr: P.sr, sig: P.sig, discAngle: P.discAngle, safe: SAFE, holdOn: S.peakHold > 0
+  });
+}
+
+function makeIcon() {
+  try {
+    const c = document.createElement('canvas'); c.width = c.height = 180;
+    const x = c.getContext('2d');
+    x.fillStyle = '#000'; x.fillRect(0, 0, 180, 180);
+    [5, 8, 6, 9, 7, 4, 3].forEach((h, i) => {
+      for (let j = 0; j < 10; j++) { x.fillStyle = j < h ? '#A8F0C8' : '#1B2E24'; x.beginPath(); rr(x, 24 + i * 19, 152 - j * 13 - 10, 10, 10, 5); x.fill(); }
+    });
+    $('touchIcon').href = c.toDataURL('image/png');
+  } catch (e) { }
+}
+
+onResize();
+applyTheme();
+applyBrightness();
+setupBands();
+buildLamps();
+showStart();
+makeIcon();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

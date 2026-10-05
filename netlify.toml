@@ -1,0 +1,8 @@
+[build]
+  publish = "."
+
+# Always fetch the latest page so an installed home-screen app picks up updates.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
