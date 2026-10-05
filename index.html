@@ -1143,10 +1143,18 @@ class Renderer {
     f.windows = null;
     for (const it of LAYOUTS[t.layout](B, u, t, f.opts)) MOD[it.m](this, it.r, f, it);
     if (f.opts.scanlines) this.drawCRT(t, f.windows);
+    // iOS keeps its status bar (time, battery) over the top of a home-screen app and it can't be hidden
+    // or moved. Give it a black bezel strip so it reads as part of the surround, not over the artwork.
+    if (s.t > 0) {
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, s.t);
+      const g = ctx.createLinearGradient(0, s.t, 0, s.t + 8);
+      g.addColorStop(0, 'rgba(0,0,0,0.55)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.fillRect(0, s.t, W, 8);
+    }
   }
   drawFascia(f, it) {
     const t = f.theme, W = this.W, H = this.H, c = this.face || (this.face = document.createElement('canvas'));
-    const key = [this.c.width, this.c.height, t.id, JSON.stringify(it.windows), it.side].join('|');
+    const st = (f.safe && f.safe.t) || 0, key = [this.c.width, this.c.height, t.id, JSON.stringify(it.windows), it.side, st].join('|');
     if (key !== this.faceKey) {
       this.faceKey = key; c.width = this.c.width; c.height = this.c.height;
       const x = c.getContext('2d'), u = f.u;
@@ -1156,7 +1164,7 @@ class Renderer {
         paintWood(x, 0, 0, it.side, H); paintWood(x, W - it.side, 0, it.side, H);
       } else paintBrushed(x, 0, 0, W, H, t.face);
       const sr = Math.max(3, u * 0.9), si = u * 2.2 + it.side;
-      for (const [sx, sy] of [[si, u * 2.2], [W - si, u * 2.2], [si, H - u * 2.2], [W - si, H - u * 2.2]]) paintScrew(x, sx, sy, sr);
+      for (const [sx, sy] of [[si, st + u * 2.2], [W - si, st + u * 2.2], [si, H - u * 2.2], [W - si, H - u * 2.2]]) paintScrew(x, sx, sy, sr);
       for (const w of it.windows) paintRecess(x, w, t);
       for (const [s, ex, ey, size, align] of it.engr) if (s) engrave(x, s, ex, ey, size, t, { align, sp: 0.32 });
     }
