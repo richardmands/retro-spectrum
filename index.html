@@ -114,14 +114,14 @@ const THEMES = [
     glow: '#FF8C1A', glowStrength: 10, segGap: 2, barGap: 4, radius: 1, header: 'SPECTRUM ANALYZER',
     freqs: [40, 100, 250, 1000, 4000, 16000], segments: 16 },
   { id: 'bubble-grid', name: 'Bubble Grid', layout: 'synth', colourMode: 'gradient',
-    bg: '#05060F', panel: '#080A1A', segOff: '#141A33', segOffAlpha: 0.72, segLow: '#1E7BFF', segHigh: '#58D8FF', peak: '#FF4FA3',
-    accent: '#FF4FA3', label: '#4A6BA8', gridColour: '#8A2BE2', gridHorizon: '#FF4FA3',
+    bg: '#05060F', panel: '#080A1A', segOff: '#141A33', segLow: '#1E7BFF', segHigh: '#58D8FF', peak: '#FF4FA3',
+    accent: '#FF4FA3', label: '#4A6BA8',
     glow: '#58D8FF', glowStrength: 16, segGap: 3, barGap: 4, radius: 2,
     header: 'GRAPHIC EQUALIZER', headerColour: '#58D8FF', headerRight: 'SPECTRUM ANALYZER',
     freqs: [40, 100, 250, 1000, 4000, 16000], segments: 16 },
   { id: 'wireframe-lcd', name: 'Wireframe LCD', layout: 'instrument', colourMode: 'fixed',
     bg: '#EDEFF2', panel: '#E3E7ED', segOff: '#CDD4DE', segLow: '#1E3A6B', segHigh: '#1E3A6B', peak: '#0A1428',
-    accent: '#4A6FA5', label: '#6B7A90', lineWork: '#A8B4C6', radarCentre: '#2A3A6B',
+    accent: '#4A6FA5', label: '#6B7A90', lineWork: '#A8B4C6',
     glow: '#000000', glowStrength: 0, segGap: 2, barGap: 3, radius: 0, inverted: true,
     header: 'FFT {SR}  VER 3.2', freqs: [50, 100, 200, 500, 1000, 2000, 5000, 10000], segments: 12 },
   { id: 'nixie-amber', name: 'Nixie Amber', layout: 'wide', colourMode: 'fixed',
@@ -136,8 +136,11 @@ const THEMES = [
   { id: 'gaming-rgb', name: 'Gaming RGB', layout: 'wide', colourMode: 'band',
     bg: '#000000', panel: '#000000', segOff: '#0D0D12', segLow: '#FF2D95', segHigh: '#FF2D95', peak: '#FFFFFF',
     accent: '#B26BFF', label: '#444450', glow: '#B26BFF', glowStrength: 22, segGap: 2, barGap: 3, radius: 2,
-    hueCycle: 12000, hueStep: 6, header: 'SPECTRUM ANALYZER',
-    freqs: [40, 100, 1000, 4000, 16000], segments: 16 }
+    header: 'SPECTRUM ANALYZER', freqs: [40, 100, 1000, 4000, 16000], segments: 16 },
+  { id: 'night-rider', name: 'Night Rider', layout: 'kitt', colourMode: 'fixed', mirror: true,
+    bg: '#000000', panel: '#080101', segOff: '#2A0605', segLow: '#FF1E0E', segHigh: '#FF6A45', peak: '#FFD0C0',
+    accent: '#FF2A12', label: '#7A1E14', glow: '#FF1E0E', glowStrength: 24, segGap: 3, barGap: 6, radius: 1,
+    header: 'VOICE ANALYSER', freqs: [40, 100, 250, 1000, 4000, 16000], segments: 12 }
 ];
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -167,12 +170,6 @@ function hslHex(h, s, l) {
   const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
   const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
   return '#' + [f(0), f(8), f(4)].map(x => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
-}
-// Theme tokens that change over time (Gaming RGB hue cycle)
-function resolveTheme(t, now) {
-  if (!t.hueCycle) return t;
-  const hue = (now / t.hueCycle * 360) % 360, c = hslHex(hue, 100, 55);
-  return Object.assign({}, t, { accent: c, glow: c, headerColour: c, hue });
 }
 
 /* ---------- Settings (localStorage, every access guarded) ---------- */
@@ -381,7 +378,7 @@ if (navigator.getBattery) navigator.getBattery().then(b => {
    Signal processing: log bands, ballistics, peak hold, flags
    ============================================================ */
 const P = { n: 0, lo: null, hi: null, tilt: null, chans: null, fbuf: new Float32Array(FFT / 2), tbuf: new Float32Array(FFT),
-  sr: 48000, loudUntil: 0, overUntil: 0, fade: 1, fadeTarget: 1, sig: 0, discAngle: 0, bandCap: 99, slowSince: 0, ema: 16 };
+  sr: 48000, loudUntil: 0, overUntil: 0, fade: 1, fadeTarget: 1, sig: 0, bandCap: 99, slowSince: 0, ema: 16 };
 
 function effBands() {
   let n = S.bands;
@@ -451,6 +448,10 @@ function relearn() {
 function process(now, dt) {
   const ps = S.perSource[S.source], keys = stereoDisplay() ? ['L', 'R'] : ['M'];
   const live = App.running && A.live;
+  // The analyser applies its smoothing once per read, so scale it to the frame rate:
+  // 0.6 per 60 Hz frame = 0.775 per 120 Hz frame, same response either way.
+  const smooth = Math.pow(0.6, Math.min(4, P.ema / (1000 / 60)));
+  if (live) for (const an of [A.aL, A.aR, A.aM]) if (Math.abs(an.smoothingTimeConstant - smooth) > 0.01) an.smoothingTimeConstant = smooth;
   let rms = -200, fmax = -200;
   for (const k of keys) {
     const ch = P.chans[k];
@@ -480,7 +481,7 @@ function process(now, dt) {
   const span = ceil - floor, decay = DECAY_DB[S.decay] * dt, holdMs = S.peakHold;
   const fall0 = (1 / (S.segments || 16)) / 0.12;        // ~1 segment per 120 ms, then accelerating
   P.fade += clamp(P.fadeTarget - P.fade, -dt / 0.15, dt / 0.15);
-  let sig = 0;
+  let sig = 0, sum = 0, cnt = 0;
   for (const k of keys) {
     const ch = P.chans[k];
     for (let i = 0; i < P.n; i++) {
@@ -490,13 +491,14 @@ function process(now, dt) {
       const v = clamp((ch.db[i] - floor) / span, 0, 1) * P.fade;
       ch.v[i] = v;
       if (v > sig) sig = v;
+      sum += v; cnt++;
       if (holdMs <= 0) { ch.p[i] = 0; continue; }
       if (v >= ch.p[i]) { ch.p[i] = v; ch.hold[i] = now + holdMs; ch.vel[i] = fall0; }
       else if (now > ch.hold[i]) { ch.p[i] = Math.max(v, ch.p[i] - ch.vel[i] * dt); ch.vel[i] += fall0 * 4 * dt; }
     }
   }
   P.sig = sig;
-  if (sig > 0.06) P.discAngle += dt * Math.PI * 0.9;
+  P.level = cnt ? sum / cnt : 0;                        // average across bands, for the level bar
 }
 
 /* ============================================================
@@ -569,18 +571,6 @@ function seg7(ctx, str, x, y, h, colour, o = {}) {
   ctx.fill(on);
   ctx.restore();
   return total;
-}
-
-function drawNote(ctx, cx, cy, s, col, glow) {
-  ctx.save();
-  ctx.fillStyle = col;
-  if (glow) { ctx.shadowColor = col; ctx.shadowBlur = glow; }
-  const hr = s * 0.15, h1 = { x: cx - s * 0.28, y: cy + s * 0.32 }, h2 = { x: cx + s * 0.3, y: cy + s * 0.22 };
-  for (const h of [h1, h2]) { ctx.beginPath(); ctx.ellipse(h.x, h.y, hr * 1.25, hr, -0.4, 0, Math.PI * 2); ctx.fill(); }
-  const sw = s * 0.07, s1 = h1.x + hr * 1.1, s2 = h2.x + hr * 1.1, t1 = cy - s * 0.42, t2 = cy - s * 0.52;
-  ctx.fillRect(s1 - sw, t1, sw, h1.y - t1); ctx.fillRect(s2 - sw, t2, sw, h2.y - t2);
-  ctx.beginPath(); ctx.moveTo(s1 - sw, t1); ctx.lineTo(s2, t2); ctx.lineTo(s2, t2 + s * 0.14); ctx.lineTo(s1 - sw, t1 + s * 0.14); ctx.closePath(); ctx.fill();
-  ctx.restore();
 }
 
 function drawMenu(R, ctx, cx, cy, r, t) {
@@ -713,31 +703,6 @@ const MOD = {
     ctx.fillRect(cx + w / 2 + g, cy, Math.max(0, r.x + r.w - (cx + w / 2 + g)), 1);
   },
 
-  artTile(R, r, f) {
-    const t = f.theme, ctx = R.ctx;
-    ctx.save(); ctx.beginPath(); rr(ctx, r.x, r.y, r.w, r.h, r.w * 0.14);
-    ctx.fillStyle = mix(t.panel, t.accent, 0.14); ctx.fill();
-    ctx.strokeStyle = rgba(t.accent, 0.4); ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
-    drawNote(ctx, r.x + r.w / 2, r.y + r.h / 2, r.w * 0.5, t.accent, t.glowStrength ? r.w * 0.12 : 0);
-  },
-
-  discIcon(R, r, f) {
-    const t = f.theme, ctx = R.ctx, rad = Math.min(r.w, r.h) * 0.46;
-    ctx.save();
-    ctx.translate(r.x + r.w / 2, r.y + r.h / 2); ctx.rotate(f.discAngle);
-    const g = ctx.createRadialGradient(0, 0, rad * 0.1, 0, 0, rad);
-    g.addColorStop(0, mix(t.panel, t.accent, 0.25)); g.addColorStop(1, mix(t.panel, t.accent, 0.07));
-    ctx.beginPath(); ctx.arc(0, 0, rad, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
-    ctx.strokeStyle = rgba(t.accent, 0.5); ctx.lineWidth = 1; ctx.stroke();
-    ctx.strokeStyle = rgba(t.accent, 0.13);
-    for (let k = 0.42; k < 0.95; k += 0.07) { ctx.beginPath(); ctx.arc(0, 0, rad * k, 0, Math.PI * 2); ctx.stroke(); }
-    ctx.fillStyle = rgba(t.accent, 0.2);
-    for (const a of [0, Math.PI]) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, rad * 0.95, a - 0.35, a + 0.35); ctx.closePath(); ctx.fill(); }
-    ctx.beginPath(); ctx.arc(0, 0, rad * 0.3, 0, Math.PI * 2); ctx.fillStyle = mix(t.panel, t.accent, 0.35); ctx.fill();
-    ctx.beginPath(); ctx.arc(0, 0, rad * 0.08, 0, Math.PI * 2); ctx.fillStyle = t.bg; ctx.fill();
-    ctx.restore();
-  },
-
   // Clock / date / battery — stands in for the reference app's NOW PLAYING panel
   infoPanel(R, r, f, it) {
     const t = f.theme, ctx = R.ctx, pad = it.pad || 0, gl = t.glowStrength ? 0.22 : 0, cap = it.caption || 'LOCAL TIME';
@@ -753,11 +718,10 @@ const MOD = {
     const v = it.v;
     if (v === 'h') {                       // [tile] caption/date ........ CLOCK
       let x = b.x;
-      if (it.tile) { const s = b.h * 0.8; MOD.artTile(R, { x, y: b.y + (b.h - s) / 2, w: s, h: s }, f); x += s + b.h * 0.3; }
       const ch = Math.min(b.h * 0.66, (b.x + b.w - x) * 0.55 / 2.9);
       seg7(ctx, f.clock.hm, b.x + b.w, b.y + (b.h - ch) / 2, ch, t.accent, { align: 'right', glow: gl * ch, ghost: 0.07 });
       const fs = Math.max(6, Math.min(b.h * 0.15, 15));
-      text(ctx, it.tile ? cap : cap, x, b.y + b.h * 0.36, fs, t.accent, { sp: 0.32, alpha: 0.9 });
+      text(ctx, cap, x, b.y + b.h * 0.36, fs, t.accent, { sp: 0.32, alpha: 0.9 });
       text(ctx, dateLine, x, b.y + b.h * 0.64, fs, t.label, { sp: 0.22 });
       return;
     }
@@ -770,11 +734,10 @@ const MOD = {
       return;
     }
     // 'v': tall — tile, caption, very large clock, date
-    const fs = Math.max(6, Math.min(b.w * 0.045, 16)), ts = it.tile ? Math.min(b.w * 0.28, b.h * 0.2) : 0;
+    const fs = Math.max(6, Math.min(b.w * 0.045, 16));
     const ch = Math.min(b.w / 2.95, b.h * 0.3);
-    const total = (ts ? ts + fs * 2 : 0) + fs * 1.6 + ch + fs * 2.6;
+    const total = fs * 1.6 + ch + fs * 2.6;
     let y = b.y + Math.max(0, (b.h - total) / 2);
-    if (ts) { MOD.artTile(R, { x: b.x, y, w: ts, h: ts }, f); y += ts + fs * 2; }
     text(ctx, cap, b.x, y + fs * 0.5, fs, t.label, { sp: 0.38 }); y += fs * 1.6;
     seg7(ctx, f.clock.hm, b.x, y, ch, t.accent, { glow: gl * ch, ghost: 0.07 }); y += ch + fs * 2;
     text(ctx, dateLine, b.x, y, fs * 1.1, t.accent, { sp: 0.22, alpha: 0.85 });
@@ -795,75 +758,41 @@ const MOD = {
     text(ctx, 'FAST FOURIER TRANSFORM', r.x + w + s * 0.6, cy, Math.max(6, s * 0.3), t.label, { sp: 0.42 });
   },
 
-  gridFloor(R, r, f, it) {
-    const t = f.theme, ctx = R.ctx, hy = r.y + r.h * (it.horizon ?? 0.3), by = r.y + r.h, cx = r.x + r.w / 2;
+  // Overall level as a row of lamps lighting outward from the centre (KITT-style bar, but a real meter)
+  levelBar(R, r, f) {
+    const t = f.theme, ctx = R.ctx, n = 16, half = n / 2, gap = r.w * 0.01, lw = (r.w - gap * (n - 1)) / n;
+    const lit = Math.round(clamp(f.level, 0, 1) * half);
     ctx.save();
-    ctx.beginPath(); ctx.rect(r.x, r.y - r.h, r.w, r.h * 2); ctx.clip();
-    const skyH = r.h * 0.6;
-    const sg = ctx.createLinearGradient(0, hy - skyH, 0, hy);
-    sg.addColorStop(0, rgba(t.gridHorizon, 0)); sg.addColorStop(1, rgba(t.gridHorizon, 0.16));
-    ctx.fillStyle = sg; ctx.fillRect(r.x, hy - skyH, r.w, skyH);
-    const fg = ctx.createLinearGradient(0, hy, 0, by);
-    fg.addColorStop(0, rgba(t.gridColour, 0.25)); fg.addColorStop(1, rgba(t.gridColour, 0.04));
-    ctx.fillStyle = fg; ctx.fillRect(r.x, hy, r.w, by - hy);
-    ctx.lineWidth = 1;
-    const n = 14;
-    ctx.strokeStyle = rgba(t.gridColour, 0.6);
-    ctx.beginPath();
-    for (let i = -n; i <= n; i++) { ctx.moveTo(cx + i * (r.w / n) * 0.1, hy); ctx.lineTo(cx + i * (r.w / n) * 1.5, by); }
-    ctx.stroke();
-    const ph = (f.now / 1000 * 0.5) % 1;
-    for (let k = 0; k < 18; k++) {
-      const d = k + 1 - ph, y = hy + (by - hy) / (1 + d * 0.45);
-      ctx.strokeStyle = rgba(t.gridColour, clamp((y - hy) / (by - hy) * 1.6, 0, 1) * 0.75);
-      ctx.beginPath(); ctx.moveTo(r.x, y); ctx.lineTo(r.x + r.w, y); ctx.stroke();
+    for (let i = 0; i < n; i++) {
+      const fromCentre = i < half ? half - 1 - i : i - half, on = fromCentre < lit;
+      ctx.beginPath(); rr(ctx, r.x + i * (lw + gap), r.y, lw, r.h, r.h * 0.18);
+      if (on) { ctx.shadowColor = t.glow; ctx.shadowBlur = r.h * 0.9; ctx.fillStyle = fromCentre >= half - 1 ? t.segHigh : t.segLow; }
+      else { ctx.shadowBlur = 0; ctx.fillStyle = t.segOff; }
+      ctx.fill();
     }
-    ctx.shadowColor = t.gridHorizon; ctx.shadowBlur = 14 * f.scale;
-    ctx.strokeStyle = t.gridHorizon; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(r.x, hy); ctx.lineTo(r.x + r.w, hy); ctx.stroke();
     ctx.restore();
   },
 
-  // Blueprint linework for the instrument layout: radar rings, crosshairs, sweep
-  lineWork(R, r, f, it) {
-    const t = f.theme, ctx = R.ctx, { cx, cy, rad } = it;
-    ctx.save();
-    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
-    g.addColorStop(0, rgba(t.radarCentre, 0.32 + 0.25 * f.sig)); g.addColorStop(0.4, rgba(t.radarCentre, 0.1)); g.addColorStop(1, rgba(t.radarCentre, 0));
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = t.lineWork; ctx.lineWidth = 1;
-    for (let k = 1; k <= 5; k++) { ctx.beginPath(); ctx.arc(cx, cy, rad * k / 5, 0, Math.PI * 2); ctx.stroke(); }
-    ctx.beginPath();
-    for (let a = 0; a < 360; a += 5) {
-      const c = Math.cos(a * Math.PI / 180), s = Math.sin(a * Math.PI / 180), r1 = rad * (a % 30 === 0 ? 0.93 : a % 10 === 0 ? 0.96 : 0.98);
-      ctx.moveTo(cx + c * r1, cy + s * r1); ctx.lineTo(cx + c * rad, cy + s * rad);
-    }
-    ctx.stroke();
-    ctx.setLineDash([2, 5]);
-    ctx.beginPath(); ctx.moveTo(r.x, Math.round(cy) + 0.5); ctx.lineTo(r.x + r.w, Math.round(cy) + 0.5);
-    ctx.moveTo(Math.round(cx) + 0.5, r.y); ctx.lineTo(Math.round(cx) + 0.5, r.y + r.h); ctx.stroke();
-    ctx.setLineDash([]);
-    const ang = (f.now / 1000 * 0.7) % (Math.PI * 2);
-    if (ctx.createConicGradient) {
-      const cg = ctx.createConicGradient(ang - 0.9, cx, cy);
-      cg.addColorStop(0, rgba(t.radarCentre, 0)); cg.addColorStop(0.143, rgba(t.radarCentre, 0.16)); cg.addColorStop(0.1431, rgba(t.radarCentre, 0)); cg.addColorStop(1, rgba(t.radarCentre, 0));
-      ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.strokeStyle = rgba(t.radarCentre, 0.45);
-    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(ang) * rad, cy + Math.sin(ang) * rad); ctx.stroke();
-    const fs = Math.max(6, f.u * 1.1);
-    [['000', 0], ['090', 90], ['180', 180], ['270', 270]].forEach(([s, a]) => {
-      const rd = (a - 90) * Math.PI / 180;
-      text(ctx, s, cx + Math.cos(rd) * (rad + fs * 1.4), cy + Math.sin(rd) * (rad + fs * 1.4), fs, t.label, { align: 'center', sp: 0.1 });
+  // Console indicator lamps either side of a red seven-segment clock
+  console(R, r, f) {
+    const t = f.theme, ctx = R.ctx, fl = f.flags;
+    const btns = [['AUTO LEVEL', f.autoOn], ['SIGNAL', f.music], ['LOUD', fl.loud], ['CLIP', fl.over]];
+    const ch = r.h * 0.62, cw = f.opts.clockPanel ? seg7W(f.clock.hm, ch) + r.h * 1.2 : 0, gap = r.h * 0.25;
+    const bw = (r.w - cw - gap * 3) / 4, bh = r.h * 0.78, by = r.y + (r.h - bh) / 2;
+    const xs = [r.x, r.x + bw + gap, r.x + r.w - bw * 2 - gap, r.x + r.w - bw];
+    btns.forEach(([label, on], i) => {
+      const x = xs[i], lit = i === 3 ? '#FFB020' : t.segLow;
+      ctx.save();
+      ctx.beginPath(); rr(ctx, x, by, bw, bh, bh * 0.12);
+      ctx.fillStyle = on ? lit : mix(t.panel, lit, 0.1);
+      if (on) { ctx.shadowColor = lit; ctx.shadowBlur = bh * 0.5; }
+      ctx.fill(); ctx.shadowBlur = 0;
+      ctx.strokeStyle = rgba(lit, on ? 0.9 : 0.35); ctx.lineWidth = 1; ctx.stroke();
+      ctx.restore();
+      const size = Math.max(6, Math.min(bh * 0.24, bw / (label.length * 0.85)));
+      text(ctx, label, x + bw / 2, by + bh / 2, size, on ? '#1A0200' : rgba(lit, 0.55), { align: 'center', sp: 0.12, weight: 700 });
     });
-    // corner brackets
-    const L = fs * 2.5;
-    ctx.strokeStyle = t.label; ctx.beginPath();
-    for (const [x, y, dx, dy] of [[r.x, r.y, 1, 1], [r.x + r.w, r.y, -1, 1], [r.x, r.y + r.h, 1, -1], [r.x + r.w, r.y + r.h, -1, -1]]) {
-      ctx.moveTo(x + dx * L, y + 0.5 * dy); ctx.lineTo(x + 0.5 * dx, y + 0.5 * dy); ctx.lineTo(x + 0.5 * dx, y + dy * L);
-    }
-    ctx.stroke();
-    ctx.restore();
+    if (cw) seg7(ctx, f.clock.hm, r.x + r.w / 2, r.y + (r.h - ch) / 2, ch, t.accent, { align: 'center', glow: ch * 0.25, ghost: 0.1 });
   }
 };
 
@@ -886,17 +815,19 @@ const LAYOUTS = {
     return items;
   },
 
+  // CD deck: header, a display window with the clock, the analyser, scale and a model-name footer
   deck(B, u, t, o) {
     const port = B.h > B.w, items = [], ip = u * 2.2, hh = u * 3.8, iw = B.w - ip * 2;
     items.push({ m: 'panel', r: B, rad: u * 1.8 });
     let y = B.y + ip * 0.7;
     items.push({ m: 'header', r: { x: B.x + ip, y, w: iw, h: hh }, menu: true });
     y += hh + ip * 0.7;
-    const rh = port ? u * 15 : u * 17;
-    items.push({ m: 'discIcon', r: { x: B.x + ip, y, w: rh, h: rh } });
-    items.push({ m: 'artTile', r: { x: B.x + ip + rh + u * 1.6, y: y + rh * 0.04, w: rh * 0.92, h: rh * 0.92 } });
-    if (o.clockPanel) items.push({ m: 'infoPanel', r: { x: B.x + ip + rh * 2 + u * 4.5, y, w: iw - rh * 2 - u * 4.5, h: rh }, v: 'stack' });
-    y += rh + ip;
+    if (o.clockPanel) {
+      const rh = port ? u * 11 : u * 12;
+      items.push({ m: 'infoPanel', r: { x: B.x + ip, y, w: iw, h: rh }, pad: u * 2, v: 'h', caption: 'TIME',
+        box: rgba(t.accent, 0.3), fill: mix(t.panel, t.bg, 0.6), rad: u * 1 });
+      y += rh + ip;
+    }
     const fh = u * 3, lh = o.labels ? u * 3 : 0, bottom = B.y + B.h - ip * 0.6 - fh - u * 0.6;
     const field = { x: B.x + ip, y, w: iw, h: bottom - lh - (lh ? u * 0.6 : 0) - y };
     items.push({ m: 'analyser', r: field });
@@ -905,10 +836,11 @@ const LAYOUTS = {
     return items;
   },
 
+  // Car stereo: analyser with dB scale on the left, clock display on the right
   split(B, u, t, o) {
     const port = B.h > B.w, items = [], g = u * 1.4;
     let L = B, Rp = null;
-    if (o.clockPanel && port) { const ih = B.h * 0.22; Rp = { x: B.x, y: B.y, w: B.w, h: ih }; L = { x: B.x, y: B.y + ih + g, w: B.w, h: B.h - ih - g }; }
+    if (o.clockPanel && port) { const ih = B.h * 0.18; Rp = { x: B.x, y: B.y, w: B.w, h: ih }; L = { x: B.x, y: B.y + ih + g, w: B.w, h: B.h - ih - g }; }
     else if (o.clockPanel) { const lw = B.w * 0.65; L = { x: B.x, y: B.y, w: lw, h: B.h }; Rp = { x: B.x + lw + g, y: B.y, w: B.w - lw - g, h: B.h }; }
     items.push({ m: 'panel', r: L, rad: u * 1.2, border: t.panelBorder, bw: 1.5 });
     const ip = u * 2, hh = u * 3.6, ch = u * 4, lh = o.labels ? u * 3 : 0, sm = u * 5;
@@ -923,50 +855,63 @@ const LAYOUTS = {
     items.push({ m: 'caption', r: { x: L.x + ip, y: bottom, w: L.w - ip * 2, h: ch } });
     if (Rp) {
       items.push({ m: 'panel', r: Rp, rad: u * 1.2, border: t.panelBorder, fill: mix(t.panel, t.accent, 0.05), bw: 1.5 });
-      items.push({ m: 'infoPanel', r: Rp, pad: u * 3, tile: true, caption: 'CLOCK', v: port ? 'h' : 'v' });
+      items.push({ m: 'infoPanel', r: Rp, pad: u * 3, caption: 'CLOCK', v: port ? 'h' : 'v' });
     }
     return items;
   },
 
+  // Synth-era EQ: analyser over a neon-outlined clock display
   synth(B, u, t, o) {
     const port = B.h > B.w, items = [], ip = u * 2.2, hh = u * 3.6;
     items.push({ m: 'panel', r: B, rad: u * 1.8, noScan: true });
     let y = B.y + ip * 0.7;
     items.push({ m: 'header', r: { x: B.x + ip, y, w: B.w - ip * 2, h: hh }, menu: true });
     y += hh + ip;
-    const bh = o.clockPanel ? (port ? u * 13 : u * 15) : 0, lh = o.labels ? u * 3 : 0, floorExtra = u * 3;
+    const bh = o.clockPanel ? (port ? u * 11 : u * 13) : 0, lh = o.labels ? u * 3 : 0;
     const boxY = B.y + B.h - ip * 0.8 - bh;
-    const fieldBottom = (bh ? boxY - ip : B.y + B.h - ip) - lh - floorExtra;
-    const field = { x: B.x + ip + u * 3, y, w: B.w - ip * 2 - u * 6, h: fieldBottom - y };
-    const fy = field.y + field.h * 0.35;
-    items.push({ m: 'gridFloor', r: { x: B.x + 1, y: fy, w: B.w - 2, h: fieldBottom + floorExtra + lh - fy }, horizon: 0.22 });
+    const fieldBottom = (bh ? boxY - ip : B.y + B.h - ip) - lh - (lh ? u * 0.6 : 0);
+    const field = { x: B.x + ip, y, w: B.w - ip * 2, h: fieldBottom - y };
     items.push({ m: 'analyser', r: field });
-    if (lh) items.push({ m: 'freqLabels', r: { x: field.x, y: fieldBottom + floorExtra * 0.5, w: field.w, h: lh }, field });
-    if (bh) items.push({ m: 'infoPanel', r: { x: B.x + ip, y: boxY, w: B.w - ip * 2, h: bh }, pad: u * 2, tile: true, v: 'h',
-      box: t.accent, boxGlow: u * 1.6, rad: u * 2.4, bw: 1.5, fill: rgba(t.bg, 0.6) });
+    if (lh) items.push({ m: 'freqLabels', r: { x: field.x, y: fieldBottom + u * 0.6, w: field.w, h: lh }, field });
+    if (bh) items.push({ m: 'infoPanel', r: { x: B.x + ip, y: boxY, w: B.w - ip * 2, h: bh }, pad: u * 2.4, v: 'h',
+      box: t.accent, boxGlow: u * 1.6, rad: u * 2.4, bw: 1.5 });
     return items;
   },
 
+  // Bench instrument LCD: ruled header, clock readout, analyser in a bordered window
   instrument(B, u, t, o) {
-    const port = B.h > B.w, items = [], hh = u * 3.6, top = B.y + hh + u * 2.5;
-    let cx, cy, rad, info, A;
-    if (!port) {
-      cx = B.x + B.w * 0.74; cy = B.y + B.h * 0.62; rad = Math.min(B.h * 0.33, B.w * 0.22);
-      info = { x: B.x + B.w * 0.6, y: top, w: B.w * 0.4, h: B.h * 0.2 };
-      A = { x: B.x, y: B.y + B.h * 0.42, w: B.w * 0.5, h: B.h * 0.58 };
-    } else {
-      cx = B.x + B.w * 0.5; cy = B.y + B.h * 0.4; rad = B.w * 0.34;
-      info = { x: B.x + B.w * 0.42, y: top, w: B.w * 0.58, h: B.h * 0.12 };
-      A = { x: B.x, y: B.y + B.h * 0.64, w: B.w, h: B.h * 0.36 };
-    }
-    items.push({ m: 'lineWork', r: { x: B.x, y: B.y + hh + u * 1.2, w: B.w, h: B.h - hh - u * 1.2 }, cx, cy, rad });
+    const port = B.h > B.w, items = [], hh = u * 3.6;
     items.push({ m: 'header', r: { x: B.x, y: B.y, w: B.w, h: hh }, menu: true, glyphs: true, rule: true });
-    if (o.clockPanel) items.push({ m: 'infoPanel', r: info, pad: u * 1.6, v: 'stack', box: t.lineWork, fill: rgba(t.bg, 0.9) });
+    let y = B.y + hh + u * 2.5;
+    if (o.clockPanel) {
+      const ih = port ? u * 12 : u * 14, iw = port ? B.w : B.w * 0.45;
+      items.push({ m: 'infoPanel', r: { x: B.x + B.w - iw, y, w: iw, h: ih }, pad: u * 1.6, v: 'stack', box: t.lineWork });
+      y += ih + u * 2;
+    }
+    const A = { x: B.x, y, w: B.w, h: B.y + B.h - y };
     items.push({ m: 'panel', r: A, rad: 0, border: t.lineWork, noScan: true });
     const ip = u * 1.6, lh = o.labels ? u * 2.8 : 0;
     const field = { x: A.x + ip, y: A.y + ip, w: A.w - ip * 2, h: A.h - ip * 2 - lh - (lh ? u * 0.4 : 0) };
     items.push({ m: 'analyser', r: field });
     if (lh) items.push({ m: 'freqLabels', r: { x: field.x, y: field.y + field.h + u * 0.4, w: field.w, h: lh }, field });
+    return items;
+  },
+
+  // KITT-style dashboard: level bar, mirrored voice-box analyser, console lamps + clock
+  kitt(B, u, t, o) {
+    const port = B.h > B.w, items = [], ip = u * 2.2, hh = u * 3.6, iw = B.w - ip * 2;
+    items.push({ m: 'panel', r: B, rad: u * 1.2 });
+    let y = B.y + ip * 0.7;
+    items.push({ m: 'header', r: { x: B.x + ip, y, w: iw, h: hh }, menu: true });
+    y += hh + ip * 0.8;
+    const sh = u * 3.2;
+    items.push({ m: 'levelBar', r: { x: B.x + ip, y, w: iw, h: sh } });
+    y += sh + ip;
+    const cH = port ? u * 8 : u * 9, lh = o.labels ? u * 3 : 0, cY = B.y + B.h - ip * 0.8 - cH;
+    const field = { x: B.x + ip, y, w: iw, h: cY - ip - lh - (lh ? u * 0.6 : 0) - y };
+    items.push({ m: 'analyser', r: field });
+    if (lh) items.push({ m: 'freqLabels', r: { x: field.x, y: field.y + field.h + u * 0.6, w: field.w, h: lh }, field });
+    items.push({ m: 'console', r: { x: B.x + ip, y: cY, w: iw, h: cH } });
     return items;
   }
 };
@@ -1053,10 +998,13 @@ class Renderer {
     } else { G.k = 1; G.cw = barW; G.cx = 0; G.rad = Math.min(t.radius * sc, barW / 2, segH / 2); }
     return G;
   }
+  // [rect, direction, channel index]. Stereo: L grows up, R grows down from the centre line.
+  // A `mirror` theme does the same with one channel (KITT voice box).
   halves(r, f) {
-    if (f.chans.length < 2) return [[r, 1]];
-    const gap = Math.max(3, r.h * 0.025), h = (r.h - gap) / 2;          // mirrored: L up, R down
-    return [[{ x: r.x, y: r.y, w: r.w, h }, 1], [{ x: r.x, y: r.y + h + gap, w: r.w, h }, -1]];
+    const two = f.chans.length > 1;
+    if (!two && !f.theme.mirror) return [[r, 1, 0]];
+    const gap = Math.max(3, r.h * (two ? 0.025 : 0.012)), h = (r.h - gap) / 2;
+    return [[{ x: r.x, y: r.y, w: r.w, h }, 1, 0], [{ x: r.x, y: r.y + h + gap, w: r.w, h }, -1, two ? 1 : 0]];
   }
   segXY(G, r, dir, i, c, j) {
     return [r.x + i * (G.barW + G.g) + G.cx + c * (G.cw + G.sg), dir > 0 ? r.y + r.h - (j + 1) * G.segH - j * G.sg : r.y + j * (G.segH + G.sg)];
@@ -1086,11 +1034,13 @@ class Renderer {
     const lx = this.lx, LW = this.lit.width, LH = this.lit.height;
     lx.setTransform(1, 0, 0, 1, 0, 0);
     if (t.persistence) {
-      lx.globalCompositeOperation = 'destination-out'; lx.fillStyle = `rgba(0,0,0,${1 - t.persistence})`;
+      // trail fades by the same amount per second at any refresh rate (persistence is per 60 Hz frame)
+      const keep = Math.pow(t.persistence, (f.dt || 1 / 60) * 60);
+      lx.globalCompositeOperation = 'destination-out'; lx.fillStyle = `rgba(0,0,0,${1 - keep})`;
       lx.fillRect(0, 0, LW, LH); lx.globalCompositeOperation = 'source-over';
     } else lx.clearRect(0, 0, LW, LH);
     lx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    halves.forEach(([hr, dir], hi) => this.drawLit(lx, hr, dir, this.geom(hr, n, s, f), f.chans[hi], f, n, s));
+    for (const [hr, dir, ci] of halves) this.drawLit(lx, hr, dir, this.geom(hr, n, s, f), f.chans[ci], f, n, s);
 
     // 3. bloom: downsampled copies of the lit layer, added back generously, then the crisp layer on top
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1110,7 +1060,7 @@ class Renderer {
   }
   drawLit(x, r, dir, G, ch, f, n, s) {
     const t = f.theme, band = t.colourMode === 'band';
-    const bandCol = i => hslHex((f.hue + i * (t.hueStep || 6)) % 360, 100, 55);
+    const bandCol = i => hslHex(n > 1 ? i / (n - 1) * 300 : 0, 100, 55);   // red through to violet
     if (G.cont) {
       let grad = null;
       if (!band) { grad = dir > 0 ? x.createLinearGradient(0, r.y + r.h, 0, r.y) : x.createLinearGradient(0, r.y, 0, r.y + r.h); colourStops(grad, t); }
@@ -1243,10 +1193,9 @@ function thumbFrame(t) {
     v[i] = clamp(0.8 - 0.45 * (i / n) + 0.17 * Math.sin(i * 1.7) + 0.08 * Math.cos(i * 0.6), 0.06, 0.94);
     p[i] = Math.min(1, v[i] + 0.07 + 0.05 * ((i * 7) % 3));
   }
-  const rt = resolveTheme(t, 2500);
-  return { now: 0, theme: rt, hue: rt.hue || 0, chans: [{ v, p }], segs: t.segments ?? 16, opts: { labels: true, clockPanel: true },
-    flags: { st: true, dsp: true, loud: true, over: false, source: 'line' }, clock: { hm: '12:33', mdSlash: '10/05', md: '10-5', dow: 'MON' },
-    battery: 40, sr: 48000, sig: 0.6, discAngle: 0.4, safe: null, holdOn: true };
+  return { now: 0, theme: t, chans: [{ v, p }], segs: t.segments ?? 16, opts: { labels: true, clockPanel: true },
+    flags: { st: true, dsp: true, loud: true, over: false, source: 'line' }, autoOn: true, music: true, clock: { hm: '12:33', mdSlash: '10/05', md: '10-5', dow: 'MON' },
+    battery: 40, sr: 48000, sig: 0.6, level: 0.5, safe: null, holdOn: true };
 }
 function thumbFor(t) {
   let c = thumbCache.get(t.id);
@@ -1273,7 +1222,12 @@ function autoStatus() {
   const w = P.window || autoWindow(), d = v => '−' + Math.abs(Math.round(v));
   return `${d(w[0])} TO ${d(w[1])} dBFS · ${!App.running ? 'IDLE' : P.music ? 'MUSIC' : 'SILENCE'}`;
 }
-setInterval(() => { const el = $('autoStat'); if (UI.open && el) el.textContent = autoStatus(); }, 400);
+setInterval(() => {
+  if (!UI.open) return;
+  const el = $('autoStat'), fp = $('fps');
+  if (el) el.textContent = autoStatus();
+  if (fp) fp.textContent = Math.round(1000 / P.ema);
+}, 400);
 const fmtVal = (v, unit) => unit === '%' ? v + '%' : (v < 0 ? '−' + Math.abs(v) : v) + ' dBFS';
 const onOff = [[true, 'ON'], [false, 'OFF']];
 
@@ -1284,7 +1238,7 @@ function buildSettings() {
     .concat(A.devices.filter(d => d.deviceId !== 'communications' && d.deviceId !== 'default')
       .map((d, i) => `<option value="${esc(d.deviceId)}"${d.deviceId === devCur ? ' selected' : ''}>${esc((d.label || 'INPUT ' + (i + 1)).toUpperCase())}</option>`)).join('');
   const status = App.running && A.live
-    ? `ACTIVE INPUT: <b>${esc((A.deviceLabel || '—').toUpperCase())}</b> &middot; ${P.sr / 1000} kHz &middot; ${A.stereo ? '2 CH' : '1 CH'}`
+    ? `ACTIVE INPUT: <b>${esc((A.deviceLabel || '—').toUpperCase())}</b> &middot; ${P.sr / 1000} kHz &middot; ${A.stereo ? '2 CH' : '1 CH'} &middot; <span id="fps">${Math.round(1000 / P.ema)}</span> FPS`
     : 'NOT RUNNING';
   sh.innerHTML =
     `<div class="sh-head"><div class="sh-title">SETTINGS</div><button class="x" data-act="close" aria-label="Close">×</button></div>` +
@@ -1450,13 +1404,13 @@ function frame(now) {
   if (App.running && now - lastLearnSave > 20000) { lastLearnSave = now; save(); }   // keep what auto-level learned
   if (P.n !== effBands()) setupBands();
   process(now, dt);
-  const t = resolveTheme(theme(), now), ps = S.perSource[S.source];
+  const t = theme(), ps = S.perSource[S.source];
   R.render({
-    now, theme: t, hue: t.hue || 0,
+    now, dt, theme: t, autoOn: ps.auto, music: P.music,
     chans: stereoDisplay() ? [P.chans.L, P.chans.R] : [P.chans.M],
     segs: S.segments, opts: { labels: S.labels, clockPanel: S.clockPanel },
     flags: { st: A.live && A.stereo, dsp: ps.tilt || S.source === 'mic', loud: now < P.loudUntil, over: now < P.overUntil, source: S.source },
-    clock: clock(), battery: BAT.pct, sr: P.sr, sig: P.sig, discAngle: P.discAngle, safe: SAFE, holdOn: S.peakHold > 0
+    clock: clock(), battery: BAT.pct, sr: P.sr, sig: P.sig, level: P.level, safe: SAFE, holdOn: S.peakHold > 0
   });
 }
 
