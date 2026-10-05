@@ -1,0 +1,38 @@
+# Builds the full-screen iPad wrapper on a GitHub-hosted Mac and publishes an unsigned .ipa.
+# Install it with Sideloadly (Windows/Mac) using your Apple ID, which signs it for your iPad.
+name: Build iPad app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['ios-wrapper/**', '.github/workflows/ios.yml']
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          cd ios-wrapper && xcodegen generate
+
+      - name: Build (unsigned)
+        run: |
+          cd ios-wrapper
+          xcodebuild -project RetroSpectrum.xcodeproj -target RetroSpectrum -configuration Release -sdk iphoneos \
+            SYMROOT="$PWD/build" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+
+      - name: Package .ipa
+        run: |
+          cd ios-wrapper
+          mkdir -p Payload
+          cp -R build/Release-iphoneos/RetroSpectrum.app Payload/
+          zip -qry RetroSpectrum.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RetroSpectrum-ipa
+          path: ios-wrapper/RetroSpectrum.ipa

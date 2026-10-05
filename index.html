@@ -94,6 +94,7 @@ const HOLD_OPTS = [0, 500, 900, 1500, 3000];
 const DECAY_DB = { slow: 7, medium: 14, fast: 28 };   // dB per second
 const OVER_RED = '#FF3B30';
 const DEMO = /[?&]demo\b/.test(location.search);
+const IN_APP = /[?&]app\b/.test(location.search);       // inside the native iPad wrapper (it keeps the screen awake itself)
 
 // Each theme is a token set + a layout variant. The renderer knows nothing about individual themes.
 // `segments` is the segment count applied when the theme is picked (user can change it after).
@@ -1480,7 +1481,7 @@ function buildSettings() {
     `<div class="row"><div class="lbl">INPUT DEVICE<small>${sn}</small></div><select id="devSel">${devOpts}</select></div>` +
     sliderRow('BRIGHTNESS', '', 'brightness', 20, 100, S.brightness, '%') +
     `<div class="note">${status}<br>` +
-    (WAKE_OK ? '' : 'SCREEN WAKE LOCK IS NOT AVAILABLE HERE — SET AUTO-LOCK TO NEVER IN IPAD SETTINGS.<br>') +
+    (WAKE_OK || IN_APP ? '' : 'SCREEN WAKE LOCK IS NOT AVAILABLE HERE — SET AUTO-LOCK TO NEVER IN IPAD SETTINGS.<br>') +
     'TWO-FINGER TAP OPENS SETTINGS &middot; TAP OUTSIDE TO CLOSE</div>';
   sh.querySelectorAll('.card').forEach(card => card.insertBefore(thumbFor(THEMES.find(t => t.id === card.dataset.theme)), card.firstChild));
   sh.scrollTop = scroll;
