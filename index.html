@@ -8,7 +8,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Spectrum">
 <meta name="theme-color" content="#000000" id="themeColor">
-<link rel="apple-touch-icon" id="touchIcon" href="data:,">
+<link rel="apple-touch-icon" id="touchIcon" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
 <title>Retro Spectrum</title>
 <style>
 :root{--bg:#000;--panel:#0A1510;--accent:#8CFFC0;--label:#3A5F4C;--segoff:#1B2E24;--line:rgba(140,255,192,.2);--glow:rgba(140,255,192,.55);--bri:1;
@@ -1712,7 +1714,6 @@ applyBrightness();
 setupBands();
 buildLamps();
 showStart();
-makeIcon();
 requestAnimationFrame(frame);
 </script>
 </body>

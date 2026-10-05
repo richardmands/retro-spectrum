@@ -2,7 +2,7 @@
   publish = "."
   # Only deploy when the site itself changed (skips commits that touch just the iPad wrapper or CI).
   # Exit code 0 tells Netlify to skip the build.
-  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- index.html netlify.toml"
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ':!ios-wrapper' ':!.github'"
 
 # Always fetch the latest page so an installed home-screen app picks up updates.
 [[headers]]
