@@ -194,7 +194,7 @@ function hslHex(h, s, l) {
 const STORE_KEY = 'retroSpectrum.v1';
 const DEFAULTS = {
   source: 'line', theme: 'vfd-green', bands: 24, segments: 16, channels: 'mono', peakHold: 900, decay: 'medium',
-  labels: true, clockPanel: true, scanlines: true, glow: 'off', brightness: 100,
+  labels: true, clockPanel: true, scanlines: true, glow: 'off', fullscreen: true, brightness: 100,
   devices: { line: '', mic: '' },
   perSource: { line: { floor: -72, ceil: -6, tilt: true, auto: true }, mic: { floor: -95, ceil: -35, tilt: true, auto: true } },
   // What auto-sensitivity has learned about each input (dBFS): waveform noise RMS, how high that
@@ -1388,7 +1388,23 @@ async function switchSource(to, force) {
   finally { App.busy = false; if (UI.open) buildSettings(); }
 }
 
+// Fullscreen API (works for whole pages on iPad, not just video): hides the iOS status bar.
+// Needs a tap every launch, so the start tap asks for it too.
+const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+const FS_OK = !IN_APP && !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+function enterFullscreen() {
+  if (!FS_OK || fsEl()) return;
+  const el = document.documentElement;
+  try { const p = (el.requestFullscreen || el.webkitRequestFullscreen).call(el); if (p && p.catch) p.catch(() => { }); } catch (e) { }
+}
+function toggleFullscreen() {
+  if (!fsEl()) { enterFullscreen(); return; }
+  try { (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch (e) { }
+}
+for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, () => { setTimeout(onResize, 100); if (UI.open) buildSettings(); });
+
 $('overlay').addEventListener('click', e => {
+  if (S.fullscreen) enterFullscreen();             // must run synchronously inside the tap
   const b = e.target.closest('[data-ov]');
   if (b) {
     const a = b.dataset.ov;
@@ -1478,6 +1494,8 @@ function buildSettings() {
     optRow('LABELS', 'labels', onOff, S.labels) +
     optRow('CLOCK PANEL', 'clockPanel', onOff, S.clockPanel, 'OR TAP CLOCK IN HEADER') +
     optRow('SCANLINES', 'scanlines', onOff, S.scanlines) +
+    (FS_OK ? optRow('FULL SCREEN', 'fullscreen', onOff, S.fullscreen, 'HIDES THE STATUS BAR &middot; ON EACH START') +
+      `<div class="row"><div class="lbl"></div><div class="opts"><button class="opt${fsEl() ? ' on' : ''}" data-act="fs">${fsEl() ? 'EXIT FULL SCREEN' : 'GO FULL SCREEN NOW'}</button></div></div>` : '') +
     `<div class="row"><div class="lbl">INPUT DEVICE<small>${sn}</small></div><select id="devSel">${devOpts}</select></div>` +
     sliderRow('BRIGHTNESS', '', 'brightness', 20, 100, S.brightness, '%') +
     `<div class="note">${status}<br>` +
@@ -1509,6 +1527,7 @@ $('settings').addEventListener('click', e => {
   if (!b || b.disabled) return;
   if (b.dataset.act === 'close') { closeSettings(); return; }
   if (b.dataset.act === 'relearn') { relearn(); buildSettings(); return; }
+  if (b.dataset.act === 'fs') { toggleFullscreen(); return; }
   if (b.dataset.theme) {
     S.theme = b.dataset.theme;
     const t = theme();
